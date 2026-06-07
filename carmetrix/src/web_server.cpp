@@ -5,6 +5,7 @@
 #include "github_ota.h"
 #include "alert_manager.h"
 #include "web_index.h"        // web UI compressa (embedded → OTA)
+#include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncJson.h>           // AsyncCallbackJsonWebHandler
 #include <LittleFS.h>
@@ -69,6 +70,40 @@ void WebServer::begin() {
     }
     String out;
     serializeJson(doc, out);
+    jsonReply(req, 200, out);
+  });
+
+  // ─────────────────────────────────────────────────────────
+  //  API: scan reti WiFi (async) — trigger
+  // ─────────────────────────────────────────────────────────
+  server.on("/api/wifi/scan", HTTP_POST, [](AsyncWebServerRequest* req) {
+    WiFi.mode(WIFI_AP_STA);     // abilita STA mantenendo l'AP
+    WiFi.scanDelete();
+    WiFi.scanNetworks(true);    // asincrono, non blocca
+    jsonReply(req, 200, "{\"ok\":true}");
+  });
+
+  // ─────────────────────────────────────────────────────────
+  //  API: risultati scan WiFi (polling)
+  // ─────────────────────────────────────────────────────────
+  server.on("/api/wifi/scan/results", HTTP_GET, [](AsyncWebServerRequest* req) {
+    int n = WiFi.scanComplete();
+    JsonDocument doc;
+    if (n == WIFI_SCAN_RUNNING) {
+      doc["scanning"] = true;
+    } else {
+      doc["scanning"] = false;
+      JsonArray arr = doc["nets"].to<JsonArray>();
+      for (int i = 0; i < n; i++) {
+        if (WiFi.SSID(i).isEmpty()) continue;   // scarta reti nascoste
+        JsonObject o = arr.add<JsonObject>();
+        o["ssid"] = WiFi.SSID(i);
+        o["rssi"] = WiFi.RSSI(i);
+        o["lock"] = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
+      }
+      if (n >= 0) WiFi.scanDelete();
+    }
+    String out; serializeJson(doc, out);
     jsonReply(req, 200, out);
   });
 

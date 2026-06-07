@@ -5,7 +5,7 @@
 //  Pin definitions, costanti globali, versione firmware
 // ============================================================
 
-#define CARMETRIX_VERSION "0.2.2"
+#define CARMETRIX_VERSION "0.2.3"
 
 // ── OTA da GitHub ────────────────────────────────────────────
 // Il web app interroga le Release di questo repo per nuovi firmware.

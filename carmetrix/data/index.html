@@ -203,8 +203,12 @@ input[type=number]{
   <div class="card">
     <div class="card-title">WiFi di casa (per aggiornamenti)</div>
     <div class="form-group">
-      <label>Nome rete (SSID)</label>
-      <input type="text" id="home-ssid" placeholder="es. CasaWiFi">
+      <label>Rete WiFi</label>
+      <div style="display:flex;gap:.5rem">
+        <input type="text" id="home-ssid" placeholder="seleziona o scrivi" style="flex:1">
+        <button class="btn btn-sm" id="btn-wifiscan" onclick="scanWifi()">⟳ Scan</button>
+      </div>
+      <div id="wifi-list" class="dev-list"></div>
     </div>
     <div class="form-group">
       <label>Password</label>
@@ -746,6 +750,66 @@ function renderLive(d) {
       </div>`;
   });
   grid.innerHTML = html;
+}
+
+// ── Scan WiFi reti vicine ─────────────────────────────────
+let wifiScanTimer = null;
+
+async function scanWifi() {
+  const btn  = document.getElementById('btn-wifiscan');
+  const list = document.getElementById('wifi-list');
+  btn.disabled = true;
+  list.innerHTML = '<div style="font-size:.75rem;color:var(--dim);padding:.4rem 0">Scansione reti...</div>';
+  try { await fetch('/api/wifi/scan', { method:'POST' }); } catch(e) {}
+
+  if (wifiScanTimer) clearInterval(wifiScanTimer);
+  let tries = 0;
+  wifiScanTimer = setInterval(async () => {
+    tries++;
+    try {
+      const r = await fetch('/api/wifi/scan/results');
+      const d = await r.json();
+      if (d.scanning) return;                 // ancora in corso
+      clearInterval(wifiScanTimer); wifiScanTimer = null;
+      btn.disabled = false;
+      renderWifiList(d.nets || []);
+    } catch(e) {
+      // durante lo scan l'AP può non rispondere: si riprova
+      if (tries > 12) {
+        clearInterval(wifiScanTimer); wifiScanTimer = null; btn.disabled = false;
+        list.innerHTML = '<div style="font-size:.75rem;color:var(--red)">Scan fallito, riprova</div>';
+      }
+    }
+  }, 1000);
+}
+
+function renderWifiList(nets) {
+  const list = document.getElementById('wifi-list');
+  // dedup per SSID (tieni il segnale migliore), scarta vuote
+  const seen = {};
+  nets.filter(n => n.ssid).forEach(n => {
+    if (!(n.ssid in seen) || n.rssi > seen[n.ssid].rssi) seen[n.ssid] = n;
+  });
+  const arr = Object.values(seen).sort((a, b) => b.rssi - a.rssi);
+  if (!arr.length) {
+    list.innerHTML = '<div style="font-size:.75rem;color:var(--dim)">Nessuna rete trovata</div>';
+    return;
+  }
+  list.innerHTML = '';
+  arr.forEach(n => {
+    const bars = n.rssi > -60 ? '▮▮▮' : n.rssi > -75 ? '▮▮' : '▮';
+    const item = document.createElement('div');
+    item.className = 'dev-item';
+    item.innerHTML = `<div class="dev-name">${n.lock ? '🔒 ' : ''}${n.ssid}</div>
+                      <div class="dev-rssi">${bars}</div>`;
+    item.onclick = () => {
+      document.getElementById('home-ssid').value = n.ssid;
+      document.querySelectorAll('#wifi-list .dev-item').forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      document.getElementById('home-pass').focus();
+    };
+    list.appendChild(item);
+  });
 }
 
 // ── Buzzer ────────────────────────────────────────────────
