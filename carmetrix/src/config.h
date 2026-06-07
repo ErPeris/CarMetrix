@@ -5,7 +5,13 @@
 //  Pin definitions, costanti globali, versione firmware
 // ============================================================
 
-#define CARMETRIX_VERSION "0.1.0"
+#define CARMETRIX_VERSION "0.2.1"
+
+// ── OTA da GitHub ────────────────────────────────────────────
+// Il web app interroga le Release di questo repo per nuovi firmware.
+// Tag release atteso: vX.Y.Z  con allegato il file carmetrix.ino.bin
+#define GITHUB_OWNER  "ErPeris"
+#define GITHUB_REPO   "CarMetrix"
 
 // ── Pin hardware ─────────────────────────────────────────────
 #define PIN_BUTTON   2    // bottone navigazione (INPUT_PULLUP → GND)

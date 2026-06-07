@@ -199,6 +199,23 @@ input[type=number]{
     <div id="profile-note" style="font-size:.72rem;color:var(--dim);margin-top:-.3rem;margin-bottom:.7rem"></div>
   </div>
 
+  <!-- WiFi di casa (per OTA) -->
+  <div class="card">
+    <div class="card-title">WiFi di casa (per aggiornamenti)</div>
+    <div class="form-group">
+      <label>Nome rete (SSID)</label>
+      <input type="text" id="home-ssid" placeholder="es. CasaWiFi">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="home-pass" placeholder="(inserisci per impostarla)">
+    </div>
+    <div style="font-size:.7rem;color:var(--dim)">
+      Serve all'ESP per scaricare gli aggiornamenti da GitHub da solo.
+      Usato solo a casa/garage, non in auto.
+    </div>
+  </div>
+
   <!-- Demo Mode -->
   <div class="card">
     <div class="card-title">Demo Mode</div>
@@ -250,30 +267,94 @@ input[type=number]{
     <div id="alert-rows"></div>
   </div>
   <button class="btn btn-primary" onclick="saveAlerts()">✓ SALVA SOGLIE</button>
+
+  <!-- Buzzer -->
+  <div class="card" style="margin-top:1rem">
+    <div class="card-title">Buzzer</div>
+    <div class="demo-row" style="margin-bottom:1.1rem">
+      <div class="lbl">Suono allarmi attivo</div>
+      <div class="toggle on" id="bz-enabled" onclick="this.classList.toggle('on')"></div>
+    </div>
+
+    <div class="form-group">
+      <label>Frequenza WARN — <span id="bz-warn-val">1800</span> Hz</label>
+      <div style="display:flex;gap:.6rem;align-items:center">
+        <input type="range" id="bz-warn" min="500" max="5000" step="50" value="1800"
+               oninput="document.getElementById('bz-warn-val').textContent=this.value" style="flex:1">
+        <button class="btn btn-sm" onclick="testBuzzer(document.getElementById('bz-warn').value)">▶ Prova</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Frequenza DANGER — <span id="bz-danger-val">2700</span> Hz</label>
+      <div style="display:flex;gap:.6rem;align-items:center">
+        <input type="range" id="bz-danger" min="500" max="5000" step="50" value="2700"
+               oninput="document.getElementById('bz-danger-val').textContent=this.value" style="flex:1">
+        <button class="btn btn-sm" onclick="testBuzzer(document.getElementById('bz-danger').value)">▶ Prova</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Stile allarme DANGER</label>
+      <select id="bz-style">
+        <option value="sirena">Sirena (sweep, penetrante)</option>
+        <option value="continuo">Continuo (tono fisso, max volume)</option>
+        <option value="beep">Beep rapido</option>
+      </select>
+    </div>
+
+    <div style="font-size:.68rem;color:var(--dim);margin-bottom:.9rem">
+      💡 Un buzzer passivo è più forte vicino alla sua frequenza di risonanza
+      (spesso ~2700 Hz). Usa ▶ Prova per trovare il valore più forte/acuto sul tuo.
+    </div>
+    <button class="btn btn-primary" onclick="saveBuzzer()">✓ SALVA BUZZER</button>
+  </div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════ -->
 <!-- TAB: OTA                                              -->
 <!-- ══════════════════════════════════════════════════════ -->
 <div id="panel-ota" class="panel">
+
+  <!-- Aggiorna da GitHub -->
   <div class="card">
-    <div class="card-title">Aggiornamento firmware</div>
-    <div id="cur-ver" style="font-family:var(--mono);font-size:.75rem;color:var(--dim);margin-bottom:1rem">
-      Versione: —
+    <div class="card-title">Aggiorna da GitHub</div>
+    <div style="font-family:var(--mono);font-size:.78rem;color:var(--dim);margin-bottom:.9rem;line-height:1.6">
+      Versione installata: <span id="cur-ver2" style="color:#fff">—</span><br>
+      Ultima release: <span id="latest-ver" style="color:#fff">—</span>
     </div>
+    <button class="btn btn-primary" id="btn-check" onclick="startGithubOTA()">⟳ CONTROLLA E AGGIORNA</button>
+    <div id="gh-msg" style="font-size:.75rem;margin-top:.7rem;color:var(--dim)"></div>
+    <div style="font-size:.68rem;color:var(--dim);margin-top:.6rem">
+      L'ESP si collega al WiFi di casa e scarica l'aggiornamento da GitHub da solo.
+      Imposta il WiFi di casa nel tab <b>Setup</b>. Durante l'update il telefono
+      potrebbe disconnettersi dall'hotspot: è normale, ricollegati a fine riavvio.
+    </div>
+  </div>
+
+  <!-- Aggiorna da file -->
+  <div class="card">
+    <div class="card-title">Aggiorna da file (.bin)</div>
     <div class="form-group">
-      <label>File firmware (.bin)</label>
+      <label>File firmware</label>
       <input type="file" id="fw-file" accept=".bin" onchange="onFileSelect()">
     </div>
     <div id="fw-name" style="font-size:.72rem;color:var(--dim);margin-bottom:.8rem"></div>
     <button class="btn btn-primary" id="btn-upload" onclick="uploadFirmware()" disabled>
       ↑ CARICA FIRMWARE
     </button>
-    <div class="progress-wrap" id="progress-wrap">
+  </div>
+
+  <!-- Avanzamento (condiviso) -->
+  <div class="card" id="ota-progress-card" style="display:none">
+    <div class="card-title">Avanzamento</div>
+    <div class="progress-wrap" style="display:block">
       <div class="progress-bar" id="progress-bar"></div>
     </div>
-    <div id="ota-msg" style="font-size:.75rem;margin-top:.6rem;color:var(--dim)"></div>
+    <div id="ota-msg" style="font-size:.78rem;margin-top:.6rem;color:var(--dim)"></div>
   </div>
+
+  <!-- Riavvio -->
   <div class="card">
     <div class="card-title">Riavvio dispositivo</div>
     <button class="btn" onclick="if(confirm('Riavviare?'))reboot()">↺ RIAVVIA</button>
@@ -310,13 +391,20 @@ async function loadConfig() {
   try {
     const r = await fetch('/api/config');
     const d = await r.json();
-    document.getElementById('cur-ver').textContent = 'Versione: ' + d.version;
+    curVer  = d.version || '0.0.0';
+    ghOwner = d.ghOwner || '';
+    ghRepo  = d.ghRepo  || '';
+    document.getElementById('cur-ver2').textContent = 'v' + curVer;
     if (d.bleMac) {
       document.getElementById('sel-mac').value = d.bleMac;
       addDeviceToList(d.bleMac, d.bleMac, 0, true);
     }
     // Stato demo toggle
     if (d.demoMode) document.getElementById('demo-toggle').classList.add('on');
+
+    // WiFi di casa
+    if (d.homeSsid) document.getElementById('home-ssid').value = d.homeSsid;
+    if (d.hasWifiPass) document.getElementById('home-pass').placeholder = '•••••• (già salvata)';
 
     const badge = document.getElementById('cfg-badge');
     if (d.demoMode) {
@@ -429,7 +517,11 @@ async function saveConfig() {
     const r = await fetch('/api/config/save', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ bleMac: mac, carBrand: brand, carProfile: profile, demoMode: demo })
+      body: JSON.stringify({
+        bleMac: mac, carBrand: brand, carProfile: profile, demoMode: demo,
+        homeSsid: document.getElementById('home-ssid').value,
+        homePass: document.getElementById('home-pass').value
+      })
     });
     const d = await r.json();
     if (d.ok) toast('Salvato! Riavvio in corso...');
@@ -491,59 +583,103 @@ async function saveAlerts() {
 }
 
 // ── OTA ───────────────────────────────────────────────────
+// ── Variabili OTA / GitHub ─────────────────────────────────
+let ghOwner = '', ghRepo = '', curVer = '0.0.0';
+let otaPollTimer = null;
+
 function onFileSelect() {
   const f = document.getElementById('fw-file').files[0];
   document.getElementById('fw-name').textContent = f ? f.name + ' (' + (f.size/1024).toFixed(1) + ' KB)' : '';
   document.getElementById('btn-upload').disabled = !f;
 }
 
-async function uploadFirmware() {
+function uploadFirmware() {
   const file = document.getElementById('fw-file').files[0];
-  if (!file) return;
+  if (file) doOtaUpload(file);
+}
 
-  const btn  = document.getElementById('btn-upload');
-  const wrap = document.getElementById('progress-wrap');
+// Upload condiviso (manuale o GitHub) → /api/ota/update
+function doOtaUpload(file) {
+  const card = document.getElementById('ota-progress-card');
   const bar  = document.getElementById('progress-bar');
   const msg  = document.getElementById('ota-msg');
 
-  btn.disabled = true;
-  wrap.style.display = 'block';
-  msg.textContent = 'Upload in corso...';
+  document.getElementById('btn-upload').disabled = true;
+  card.style.display = 'block';
+  bar.style.width = '0%';
+  bar.style.background = 'var(--red)';
   msg.style.color = 'var(--dim)';
+  msg.textContent = 'Invio al dispositivo...';
 
-  const formData = new FormData();
-  formData.append('firmware', file, file.name);
+  const fd = new FormData();
+  fd.append('firmware', file, file.name || 'firmware.bin');
 
   const xhr = new XMLHttpRequest();
   xhr.upload.onprogress = e => {
     if (e.lengthComputable) {
       const pct = (e.loaded / e.total * 100).toFixed(0);
       bar.style.width = pct + '%';
-      msg.textContent = 'Upload: ' + pct + '%';
+      msg.textContent = 'Invio: ' + pct + '%';
     }
   };
   xhr.onload = () => {
     try {
       const resp = JSON.parse(xhr.responseText);
-      if (resp.ok) {
-        bar.style.background = 'var(--green)';
-        msg.style.color = 'var(--green)';
-        msg.textContent = resp.msg;
-      } else {
-        bar.style.background = 'var(--red)';
-        msg.style.color = 'var(--red)';
-        msg.textContent = resp.msg;
-        btn.disabled = false;
-      }
-    } catch(e) { msg.textContent = 'Risposta non valida'; }
+      bar.style.background = resp.ok ? 'var(--green)' : 'var(--red)';
+      msg.style.color      = resp.ok ? 'var(--green)' : 'var(--red)';
+      msg.textContent      = resp.msg;
+      if (!resp.ok) document.getElementById('btn-upload').disabled = false;
+    } catch(e) { msg.textContent = 'Risposta non valida dal dispositivo'; }
   };
   xhr.onerror = () => {
     msg.style.color = 'var(--red)';
-    msg.textContent = 'Errore di rete';
-    btn.disabled = false;
+    msg.textContent = 'Errore di rete durante l\'invio';
+    document.getElementById('btn-upload').disabled = false;
   };
   xhr.open('POST', '/api/ota/update');
-  xhr.send(formData);
+  xhr.send(fd);
+}
+
+// Avvia l'OTA lato-dispositivo: l'ESP scarica da GitHub via WiFi di casa
+async function startGithubOTA() {
+  const msg = document.getElementById('gh-msg');
+  const btn = document.getElementById('btn-check');
+  btn.disabled = true;
+  msg.style.color = 'var(--dim)';
+  msg.textContent = 'Avvio aggiornamento sul dispositivo...';
+  try {
+    await fetch('/api/ota/github', { method: 'POST' });
+  } catch(e) {}
+  if (otaPollTimer) clearInterval(otaPollTimer);
+  otaPollTimer = setInterval(pollOtaStatus, 1000);
+}
+
+function stopOtaPoll() { if (otaPollTimer) { clearInterval(otaPollTimer); otaPollTimer = null; } }
+
+async function pollOtaStatus() {
+  const msg   = document.getElementById('gh-msg');
+  const latEl = document.getElementById('latest-ver');
+  try {
+    const r = await fetch('/api/ota/status');
+    const d = await r.json();
+    if (d.latest) latEl.textContent = 'v' + d.latest;
+
+    let color = 'var(--dim)', text = d.message || '';
+    switch (d.state) {
+      case 'connecting':  text = '📶 ' + d.message; break;
+      case 'checking':    text = '🔍 ' + d.message; break;
+      case 'downloading': text = '⬇ ' + d.message + ' ' + d.progress + '%'; color = 'var(--amber)'; break;
+      case 'no_update':   color = 'var(--green)'; stopOtaPoll(); document.getElementById('btn-check').disabled = false; break;
+      case 'failed':      color = 'var(--red)';   stopOtaPoll(); document.getElementById('btn-check').disabled = false; break;
+      case 'success':     color = 'var(--green)'; text = 'Completato, riavvio in corso...'; stopOtaPoll(); break;
+    }
+    msg.style.color = color;
+    msg.textContent = text;
+  } catch(e) {
+    // Durante flash/riavvio (o se il telefono cambia rete) il device non risponde
+    msg.style.color = 'var(--amber)';
+    msg.textContent = 'Dispositivo occupato/in riavvio — ricollegati all\'hotspot tra poco e ricarica la pagina.';
+  }
 }
 
 async function reboot() {
@@ -611,9 +747,49 @@ function renderLive(d) {
   grid.innerHTML = html;
 }
 
+// ── Buzzer ────────────────────────────────────────────────
+async function loadBuzzer() {
+  let cfg = { enabled:true, warnFreq:1800, dangerFreq:2700, dangerStyle:'sirena' };
+  try {
+    const r = await fetch('/api/buzzer');
+    const j = await r.json();
+    cfg = { ...cfg, ...j };
+  } catch(e) {}
+  document.getElementById('bz-enabled').classList.toggle('on', !!cfg.enabled);
+  document.getElementById('bz-warn').value = cfg.warnFreq;
+  document.getElementById('bz-warn-val').textContent = cfg.warnFreq;
+  document.getElementById('bz-danger').value = cfg.dangerFreq;
+  document.getElementById('bz-danger-val').textContent = cfg.dangerFreq;
+  document.getElementById('bz-style').value = cfg.dangerStyle;
+}
+
+async function saveBuzzer() {
+  const data = {
+    enabled:     document.getElementById('bz-enabled').classList.contains('on'),
+    warnFreq:    parseInt(document.getElementById('bz-warn').value),
+    dangerFreq:  parseInt(document.getElementById('bz-danger').value),
+    dangerStyle: document.getElementById('bz-style').value
+  };
+  try {
+    await fetch('/api/buzzer/save', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+    });
+    toast('Buzzer salvato');
+  } catch(e) { toast('Errore', 'var(--red)'); }
+}
+
+async function testBuzzer(freq) {
+  try {
+    await fetch('/api/buzzer/test', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({freq:parseInt(freq)})
+    });
+  } catch(e) {}
+}
+
 // ── Init ──────────────────────────────────────────────────
 loadConfig();
 loadAlerts();
+loadBuzzer();
 </script>
 </body>
 </html>

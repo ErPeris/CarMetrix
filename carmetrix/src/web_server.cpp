@@ -2,6 +2,8 @@
 #include "config.h"
 #include "nvs_config.h"
 #include "ble_elm327.h"
+#include "github_ota.h"
+#include "alert_manager.h"
 #include <ESPAsyncWebServer.h>
 #include <AsyncJson.h>           // AsyncCallbackJsonWebHandler
 #include <LittleFS.h>
@@ -110,6 +112,10 @@ void WebServer::begin() {
     doc["configured"]  = cfg.configured;
     doc["demoMode"]    = cfg.demoMode;
     doc["version"]     = CARMETRIX_VERSION;
+    doc["ghOwner"]     = GITHUB_OWNER;
+    doc["ghRepo"]      = GITHUB_REPO;
+    doc["homeSsid"]    = cfg.homeSsid;
+    doc["hasWifiPass"] = (cfg.homePass[0] != '\0');  // non esporre la password
     String out;
     serializeJson(doc, out);
     jsonReply(req, 200, out);
@@ -156,6 +162,13 @@ void WebServer::begin() {
           strlcpy(cfg.carProfile, obj["carProfile"], sizeof(cfg.carProfile));
         if (obj["demoMode"].is<bool>())
           cfg.demoMode = obj["demoMode"];
+        if (obj["homeSsid"].is<const char*>())
+          strlcpy(cfg.homeSsid, obj["homeSsid"], sizeof(cfg.homeSsid));
+        // Aggiorna la password solo se ne arriva una nuova non vuota
+        if (obj["homePass"].is<const char*>()) {
+          const char* p = obj["homePass"];
+          if (p && p[0] != '\0') strlcpy(cfg.homePass, p, sizeof(cfg.homePass));
+        }
         cfg.configured = true;
         NVSConfig::save(cfg);
         jsonReply(req, 200, "{\"ok\":true}");
@@ -196,6 +209,44 @@ void WebServer::begin() {
   server.addHandler(alertsHandler);
 
   // ─────────────────────────────────────────────────────────
+  //  API: configurazione buzzer
+  // ─────────────────────────────────────────────────────────
+  server.on("/api/buzzer", HTTP_GET, [](AsyncWebServerRequest* req) {
+    if (LittleFS.exists("/buzzer.json")) {
+      req->send(LittleFS, "/buzzer.json", "application/json");
+    } else {
+      const BuzzerConfig& b = AlertManager::buzzerCfg();
+      JsonDocument doc;
+      doc["enabled"]     = b.enabled;
+      doc["warnFreq"]    = b.warnFreq;
+      doc["dangerFreq"]  = b.dangerFreq;
+      doc["dangerStyle"] = b.dangerStyle;
+      String out; serializeJson(doc, out);
+      jsonReply(req, 200, out);
+    }
+  });
+
+  AsyncCallbackJsonWebHandler* buzzerHandler =
+    new AsyncCallbackJsonWebHandler("/api/buzzer/save",
+      [](AsyncWebServerRequest* req, JsonVariant& json) {
+        File f = LittleFS.open("/buzzer.json", FILE_WRITE);
+        if (f) { serializeJson(json, f); f.close(); }
+        AlertManager::loadBuzzerCfg();   // applica subito, senza riavvio
+        jsonReply(req, 200, "{\"ok\":true}");
+      });
+  server.addHandler(buzzerHandler);
+
+  // Test tono buzzer (preview per tarare il più forte/acuto)
+  AsyncCallbackJsonWebHandler* buzzerTestHandler =
+    new AsyncCallbackJsonWebHandler("/api/buzzer/test",
+      [](AsyncWebServerRequest* req, JsonVariant& json) {
+        int freq = json["freq"] | 2700;
+        AlertManager::requestTest(freq);   // il main loop suona il tono
+        jsonReply(req, 200, "{\"ok\":true}");
+      });
+  server.addHandler(buzzerTestHandler);
+
+  // ─────────────────────────────────────────────────────────
   //  OTA: upload firmware .bin
   // ─────────────────────────────────────────────────────────
   server.on("/api/ota/update", HTTP_POST,
@@ -229,6 +280,29 @@ void WebServer::begin() {
       }
     }
   );
+
+  // ─────────────────────────────────────────────────────────
+  //  API: avvia OTA da GitHub (lato dispositivo)
+  // ─────────────────────────────────────────────────────────
+  server.on("/api/ota/github", HTTP_POST, [](AsyncWebServerRequest* req) {
+    GithubOTA::request();   // il main loop esegue l'OTA (bloccante)
+    jsonReply(req, 200, "{\"ok\":true}");
+  });
+
+  // ─────────────────────────────────────────────────────────
+  //  API: stato OTA GitHub (polling dalla web UI)
+  // ─────────────────────────────────────────────────────────
+  server.on("/api/ota/status", HTTP_GET, [](AsyncWebServerRequest* req) {
+    const char* names[] = { "idle","connecting","checking","no_update",
+                            "downloading","failed","success" };
+    JsonDocument doc;
+    doc["state"]    = names[(int)GithubOTA::state()];
+    doc["progress"] = GithubOTA::progress();
+    doc["message"]  = GithubOTA::message();
+    doc["latest"]   = GithubOTA::latestVersion();
+    String out; serializeJson(doc, out);
+    jsonReply(req, 200, out);
+  });
 
   // ─────────────────────────────────────────────────────────
   //  API: riavvio

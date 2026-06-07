@@ -16,6 +16,8 @@ struct CarMetrixConfig {
   uint32_t pidMask3;         // PID supportati 41-60
   bool     configured;       // true dopo primo setup completo
   bool     demoMode;         // true → genera dati sintetici, salta BLE
+  char     homeSsid[33];     // WiFi di casa per OTA da GitHub
+  char     homePass[65];     // password WiFi di casa
 };
 
 namespace NVSConfig {

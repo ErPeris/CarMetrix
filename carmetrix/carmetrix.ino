@@ -21,6 +21,8 @@
 #include "src/profile_loader.h"
 #include "src/alert_manager.h"
 #include "src/display_oled.h"
+#include "src/github_ota.h"
+#include <LittleFS.h>
 
 // ── State machine ─────────────────────────────────────────────
 enum AppState {
@@ -100,6 +102,7 @@ void setup() {
   Serial.begin(115200);
   pinMode(PIN_BUTTON, INPUT_PULLUP);
 
+  LittleFS.begin(true);   // monta il FS prima di leggere alert/buzzer config
   AlertManager::begin();
   DisplayOled::begin();
   DisplayOled::showBoot();
@@ -138,11 +141,27 @@ void setup() {
   }
 }
 
+// ── OTA GitHub: eseguito nel loop (bloccante) quando richiesto ──
+static void serviceGithubOTA() {
+  if (!GithubOTA::isRequested()) return;
+  DisplayOled::showMessage("AGGIORNAMENTO", "via GitHub...");
+  GithubOTA::run();   // bloccante; se va a buon fine riavvia da solo
+  // Se ritorna qui → fallito o nessun update: mostra l'esito
+  DisplayOled::showMessage("OTA", GithubOTA::message());
+  delay(2000);
+}
+
 // ============================================================
 //  LOOP
 // ============================================================
 void loop() {
   handleButton();
+
+  // OTA GitHub e test buzzer solo dove l'AP/web è attivo
+  if (appState == STATE_CONFIG || appState == STATE_DEMO) {
+    serviceGithubOTA();
+    AlertManager::serviceTest();
+  }
 
   switch (appState) {
 

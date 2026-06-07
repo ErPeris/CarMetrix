@@ -10,6 +10,10 @@ static bool        flashFlag         = false;
 static unsigned long lastBuzzerMs    = 0;
 static bool        buzzerActive      = false;
 
+// ── Configurazione buzzer (default = forte e acuto, non "sveglia") ──
+static BuzzerConfig bz = { true, 1800, 2700, "sirena" };
+static volatile int testFreq = 0;
+
 // ── Default soglie ────────────────────────────────────────────
 static const AlertThreshold DEFAULTS[] = {
   { "IAT",     50.0f,  65.0f,  true },
@@ -37,6 +41,49 @@ void AlertManager::begin() {
   if (thresholds.empty()) {
     for (auto& d : DEFAULTS) thresholds.push_back(d);
     saveThresholds();
+  }
+  loadBuzzerCfg();
+}
+
+// ── Configurazione buzzer ─────────────────────────────────────
+void AlertManager::loadBuzzerCfg() {
+  if (!LittleFS.exists("/buzzer.json")) return;   // mantiene i default
+  File f = LittleFS.open("/buzzer.json", "r");
+  if (!f) return;
+  JsonDocument d;
+  if (deserializeJson(d, f)) { f.close(); return; }
+  f.close();
+  bz.enabled    = d["enabled"]    | true;
+  bz.warnFreq   = d["warnFreq"]   | 1800;
+  bz.dangerFreq = d["dangerFreq"] | 2700;
+  strlcpy(bz.dangerStyle, d["dangerStyle"] | "sirena", sizeof(bz.dangerStyle));
+}
+
+const BuzzerConfig& AlertManager::buzzerCfg() { return bz; }
+
+void AlertManager::requestTest(int freq) { testFreq = freq; }
+
+void AlertManager::serviceTest() {
+  if (testFreq <= 0) return;
+  int f = testFreq;
+  testFreq = 0;
+  beeperTone(f, 700);   // tono continuo per valutare volume/acutezza
+}
+
+// Riproduce il tono danger secondo lo stile configurato
+static void playDanger() {
+  int f = bz.dangerFreq;
+  String s = bz.dangerStyle;
+  if (s == "continuo") {
+    beeperTone(f, 900);
+  } else if (s == "beep") {
+    for (int i = 0; i < 3; i++) { beeperTone(f, 110); delay(70); }
+  } else {  // "sirena" — sweep su/giù, acuto e penetrante
+    for (int sweep = 0; sweep < 2; sweep++) {
+      for (int x = f * 6 / 10; x <= f; x += 90) { ledcWriteTone(PIN_BUZZER, x); delay(14); }
+      for (int x = f; x >= f * 6 / 10; x -= 90) { ledcWriteTone(PIN_BUZZER, x); delay(14); }
+    }
+    ledcWriteTone(PIN_BUZZER, 0);
   }
 }
 
@@ -128,15 +175,15 @@ void AlertManager::beepConfirm() {
 }
 
 void AlertManager::beepWarn() {
-  beeperTone(BUZZER_FREQ_WARN, 200); delay(100);
-  beeperTone(BUZZER_FREQ_WARN, 200);
+  if (!bz.enabled) return;
+  beeperTone(bz.warnFreq, 180); delay(90);
+  beeperTone(bz.warnFreq, 180);
   lastBuzzerMs = millis();
 }
 
 void AlertManager::beepDanger() {
-  for (int i = 0; i < 4; i++) {
-    beeperTone(BUZZER_FREQ_DANGER, 100); delay(80);
-  }
+  if (!bz.enabled) return;
+  playDanger();
   lastBuzzerMs = millis();
 }
 
