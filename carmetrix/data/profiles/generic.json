@@ -1,0 +1,6 @@
+{
+  "brand": "Generic (Standard OBD2)",
+  "description": "Profilo universale Mode 01. Funziona su qualsiasi auto OBD2 (1996+). Nessun PID proprietario.",
+  "mode": "01",
+  "pids": []
+}

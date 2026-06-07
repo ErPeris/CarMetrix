@@ -1,0 +1,31 @@
+{
+  "brand": "Honda",
+  "description": "Honda / Acura — Mode 22 PIDs. Testato su Civic 1.5T (FK7/FK8), CR-V, HR-V turbo.",
+  "mode": "22",
+  "pids": [
+    {
+      "id": "1254",
+      "name": "BOOST",
+      "unit": "kPa",
+      "formula": "(A*256+B)*0.1",
+      "target": "boost",
+      "note": "Pressione boost reale turbo"
+    },
+    {
+      "id": "1756",
+      "name": "TRANS",
+      "unit": "°C",
+      "formula": "A-40",
+      "target": "trans_temp",
+      "note": "Temperatura fluido CVT / cambio"
+    },
+    {
+      "id": "1253",
+      "name": "OIL",
+      "unit": "°C",
+      "formula": "A-40",
+      "target": "oil_temp",
+      "note": "Temperatura olio motore"
+    }
+  ]
+}

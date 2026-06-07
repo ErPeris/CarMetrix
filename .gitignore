@@ -1,0 +1,26 @@
+# ── Build artifacts Arduino / PlatformIO ──
+build/
+*.elf
+*.map
+*.hex
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Firmware compilati (vanno allegati alle Release, non committati)
+*.bin
+
+# ── Editor / IDE ──
+.vscode/
+.idea/
+*.swp
+*~
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Credenziali locali (vedi secrets.h.example) ──
+# Non committare mai SSID/password reali
+secrets.h
