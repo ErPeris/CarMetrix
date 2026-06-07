@@ -4,6 +4,7 @@
 #include "ble_elm327.h"
 #include "github_ota.h"
 #include "alert_manager.h"
+#include "web_index.h"        // web UI compressa (embedded → OTA)
 #include <ESPAsyncWebServer.h>
 #include <AsyncJson.h>           // AsyncCallbackJsonWebHandler
 #include <LittleFS.h>
@@ -40,12 +41,13 @@ void WebServer::begin() {
   server.on("/canonical.html",            HTTP_GET, handleCaptive);
   server.on("/success.txt",               HTTP_GET, handleCaptive);
 
-  // ── Pagina principale da LittleFS ────────────────────────
+  // ── Pagina principale: embedded nel firmware (gzip) ──────
+  //  Così la UI si aggiorna via OTA insieme al firmware.
   server.on("/", HTTP_GET, [](AsyncWebServerRequest* req) {
-    if (LittleFS.exists("/index.html"))
-      req->send(LittleFS, "/index.html", "text/html");
-    else
-      req->send(200, "text/html", "<h2>CarMetrix</h2><p>Upload data/ via LittleFS tool.</p>");
+    AsyncWebServerResponse* resp =
+      req->beginResponse(200, "text/html", INDEX_HTML_GZ, INDEX_HTML_GZ_LEN);
+    resp->addHeader("Content-Encoding", "gzip");
+    req->send(resp);
   });
 
   // ── File statici (js, css, icons) ────────────────────────

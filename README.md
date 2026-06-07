@@ -38,8 +38,12 @@ del veicolo su un display, con allarmi sonori/visivi configurabili.
 1. Arduino IDE, board **ESP32C3 Dev Module**
 2. Partition Scheme: **Minimal SPIFFS (1.9MB APP with OTA/128KB SPIFFS)**
 3. Librerie: `U8g2`, `ESPAsyncWebServer` + `AsyncTCP` (ESP32Async), `ArduinoJson`
-4. Compila e carica lo sketch (`carmetrix/carmetrix.ino`)
-5. Carica il filesystem: `Ctrl+Shift+P` → *Upload LittleFS to Pico/ESP8266/ESP32*
+4. Se hai modificato la web UI: `python tools/embed_web.py` (rigenera `src/web_index.h`)
+5. Compila e carica lo sketch (`carmetrix/carmetrix.ino`)
+6. (Solo per i profili veicolo) carica il filesystem: `Ctrl+Shift+P` → *Upload LittleFS*
+
+> La web UI (`index.html`) è **embedded nel firmware** (gzip) → si aggiorna via OTA.
+> LittleFS serve solo per i profili veicolo e per la config runtime (alert/buzzer).
 
 ## Primo avvio
 

@@ -2,6 +2,7 @@
 #include "config.h"
 #include <WiFi.h>
 #include <DNSServer.h>
+#include <ESPmDNS.h>
 
 static DNSServer dnsServer;
 static String    apSSID;
@@ -29,6 +30,12 @@ void WiFiPortal::begin() {
   dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
   dnsServer.start(DNS_PORT, "*", IPAddress(192, 168, 4, 1));
 
+  // mDNS → raggiungibile come http://carmetrix.local
+  if (MDNS.begin("carmetrix")) {
+    MDNS.addService("http", "tcp", WEB_PORT);
+    Serial.println("[Portal] mDNS: http://carmetrix.local");
+  }
+
   running = true;
   Serial.printf("[Portal] AP: %s  IP: %s\n", apSSID.c_str(), AP_IP);
 }
@@ -39,6 +46,7 @@ void WiFiPortal::loop() {
 
 void WiFiPortal::stop() {
   if (!running) return;
+  MDNS.end();
   dnsServer.stop();
   WiFi.softAPdisconnect(true);
   WiFi.mode(WIFI_OFF);

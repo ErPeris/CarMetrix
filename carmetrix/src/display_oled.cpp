@@ -131,9 +131,10 @@ void DisplayOled::showConfigMode(const char* ssid, const char* ip) {
   u8g2.clearBuffer();
   u8g2.setFont(FONT_UNIT);
   u8g2.drawStr(2, OLED_YEL_BASE, "CONFIG MODE");
-  u8g2.drawStr(0, 26, "WiFi:");
-  u8g2.drawStr(0, 37, ssid);
-  u8g2.drawStr(0, 50, ip);
+  u8g2.drawStr(0, 24, "WiFi:");
+  u8g2.drawStr(0, 35, ssid);
+  u8g2.drawStr(0, 49, "carmetrix.local");
+  u8g2.drawStr(0, 62, ip);
   u8g2.sendBuffer();
 }
 

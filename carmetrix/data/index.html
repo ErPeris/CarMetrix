@@ -161,7 +161,7 @@ input[type=number]{
 <body>
 
 <div class="topbar">
-  <div class="brand">CAR<span>METRIX</span></div>
+  <div class="brand">CAR<span>METRIX</span><span id="topver" style="font-size:.6rem;color:var(--dim);letter-spacing:.05em;margin-left:.5rem"></span></div>
   <div id="cfg-badge" class="badge"><div class="dot"></div><span>Loading...</span></div>
 </div>
 
@@ -395,6 +395,7 @@ async function loadConfig() {
     ghOwner = d.ghOwner || '';
     ghRepo  = d.ghRepo  || '';
     document.getElementById('cur-ver2').textContent = 'v' + curVer;
+    document.getElementById('topver').textContent = 'v' + curVer;
     if (d.bleMac) {
       document.getElementById('sel-mac').value = d.bleMac;
       addDeviceToList(d.bleMac, d.bleMac, 0, true);
