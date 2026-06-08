@@ -1,15 +1,16 @@
 // ============================================================
-//  CarMetrix v0.1.0
-//  Display OBD2 universale — ESP32-S3
+//  CarMetrix — Display OBD2 universale (ESP32-C3 / S3)
 //
-//  Librerie richieste (Library Manager):
+//  Librerie (Library Manager):
 //    - U8g2 by oliver
-//    - ESPAsyncWebServer by lacamera (+ AsyncTCP)
+//    - ESPAsyncWebServer + AsyncTCP (by ESP32Async)
 //    - ArduinoJson by bblanchon
-//    - ESP32 BLE Arduino (incluso nel core ESP32)
+//    - ESP32 BLE Arduino (incluso nel core ESP32 v3.x)
 //
-//  Board: ESP32S3 Dev Module  |  Partition: "Default 4MB with spiffs"
-//  Dopo il build: Tools → ESP32 Sketch Data Upload (LittleFS)
+//  Board: ESP32C3 Dev Module
+//  Partition: "Minimal SPIFFS (1.9MB APP with OTA/128KB SPIFFS)"
+//  Web UI embedded nel firmware (vedi tools/embed_web.py).
+//  LittleFS solo per profili veicolo + config runtime.
 // ============================================================
 
 #include "src/config.h"
@@ -59,27 +60,22 @@ static void handleButton() {
     btnLongFired  = false;
   }
 
-  // Pressione lunga → entra/esci CONFIG MODE
+  // Pressione lunga → entra/esci dalla schermata CONFIG.
+  // L'hotspot + web sono SEMPRE attivi: qui cambia solo cosa fa il device.
   if (st == LOW && !btnLongFired &&
       millis() - btnPressedMs > BTN_LONG_PRESS) {
     btnLongFired = true;
-    if (appState == STATE_MONITORING || appState == STATE_BLE_CONNECT) {
-      // Entra in config mode
+    if (appState != STATE_CONFIG) {
+      // Entra in CONFIG: ferma i tentativi BLE, mostra schermata setup
       BleElm327::disconnect();
-      WiFiPortal::begin();
-      WebServer::begin();
       appState = STATE_CONFIG;
       AlertManager::beepConfirm();
-    } else if (appState == STATE_DEMO) {
-      // In demo AP + web sono già attivi → passa solo alla schermata config
-      appState = STATE_CONFIG;
+    } else {
+      // Esci da CONFIG: riprendi l'attività
+      if (cfg.demoMode)         appState = STATE_DEMO;
+      else if (cfg.bleMac[0])   { appState = STATE_BLE_CONNECT; bleConnectStartMs = millis(); }
+      // (se non configurato resta in CONFIG)
       AlertManager::beepConfirm();
-    } else if (appState == STATE_CONFIG) {
-      // Esci da config mode senza salvare
-      WebServer::stop();
-      WiFiPortal::stop();
-      appState = STATE_BLE_CONNECT;
-      bleConnectStartMs = millis();
     }
   }
 
@@ -119,21 +115,20 @@ void setup() {
   // La dashboard web legge sempre da questa struttura
   WebServer::setLiveData(&obdData);
 
+  // Hotspot + web server SEMPRE attivi, in ogni stato → mai tagliato fuori.
+  // Il server è asincrono (task separato): risponde anche durante i
+  // tentativi di connessione BLE bloccanti.
+  WiFiPortal::begin();
+  WebServer::begin();
+
   if (cfg.demoMode) {
-    // Demo Mode: AP + web attivi, dati sintetici, nessun BLE
     Serial.println("[Main] DEMO MODE");
     OBDDecoder::reset(obdData);
-    WiFiPortal::begin();
-    WebServer::begin();
     appState = STATE_DEMO;
   } else if (!NVSConfig::isConfigured()) {
-    // Prima volta: avvia config mode
     Serial.println("[Main] Prima configurazione");
-    WiFiPortal::begin();
-    WebServer::begin();
     appState = STATE_CONFIG;
   } else {
-    // Config esistente: carica profilo e vai in connessione
     Serial.printf("[Main] Config OK: %s / %s\n", cfg.carBrand, cfg.bleMac);
     ProfileLoader::load(cfg.carProfile);
     appState = STATE_BLE_CONNECT;
@@ -157,17 +152,15 @@ static void serviceGithubOTA() {
 void loop() {
   handleButton();
 
-  // OTA GitHub e test buzzer solo dove l'AP/web è attivo
-  if (appState == STATE_CONFIG || appState == STATE_DEMO) {
-    serviceGithubOTA();
-    AlertManager::serviceTest();
-  }
+  // AP/web SEMPRE attivi → questi girano in qualunque stato
+  WiFiPortal::loop();          // captive portal DNS
+  serviceGithubOTA();          // agisce solo se richiesto via web
+  AlertManager::serviceTest(); // agisce solo se richiesto via web
 
   switch (appState) {
 
-    // ── CONFIG MODE ─────────────────────────────────────────
+    // ── CONFIG ──────────────────────────────────────────────
     case STATE_CONFIG:
-      WiFiPortal::loop();
       if (millis() - lastDisplayMs > 1000) {
         lastDisplayMs = millis();
         DisplayOled::showConfigMode(
@@ -177,43 +170,32 @@ void loop() {
       }
       break;
 
-    // ── CONNESSIONE BLE ──────────────────────────────────────
+    // ── CONNESSIONE BLE (web resta raggiungibile) ────────────
     case STATE_BLE_CONNECT: {
-      NVSConfig::load(cfg);
-
-      // Refresh display ogni 500ms con animazione
       if (millis() - lastDisplayMs > 500) {
         lastDisplayMs = millis();
         DisplayOled::showConnecting(cfg.bleMac[0] ? cfg.bleMac : "Searching...");
       }
 
-      // Tentativo connessione
-      if (cfg.bleMac[0] != '\0') {
-        if (BleElm327::connect(cfg.bleMac)) {
-          if (BleElm327::init()) {
-            // Leggi PID supportati e salvali
-            uint32_t m1 = BleElm327::getSupportedPIDs(0);
-            uint32_t m2 = BleElm327::getSupportedPIDs(1);
-            uint32_t m3 = BleElm327::getSupportedPIDs(2);
-            NVSConfig::setPidMasks(m1, m2, m3);
-            OBDDecoder::reset(obdData);
-            AlertManager::beepConfirm();
-            appState = STATE_MONITORING;
-            Serial.println("[Main] → MONITORING");
-          }
-        }
-      }
-
-      // Timeout → rimane in attesa, riprova ogni 3s via autoReconnectLoop
+      // Tenta connessione + init (throttle 3s interno)
       BleElm327::autoReconnectLoop();
-      delay(100);
+
+      if (BleElm327::isConnected()) {
+        uint32_t m1 = BleElm327::getSupportedPIDs(0);
+        uint32_t m2 = BleElm327::getSupportedPIDs(1);
+        uint32_t m3 = BleElm327::getSupportedPIDs(2);
+        NVSConfig::setPidMasks(m1, m2, m3);
+        OBDDecoder::reset(obdData);
+        AlertManager::beepConfirm();
+        appState = STATE_MONITORING;
+        Serial.println("[Main] → MONITORING");
+      }
       break;
     }
 
-    // ── DEMO MODE ────────────────────────────────────────────
+    // ── DEMO ─────────────────────────────────────────────────
     case STATE_DEMO: {
-      WiFiPortal::loop();                  // mantiene captive portal + web
-      OBDDecoder::generateDemo(obdData);   // dati sintetici
+      OBDDecoder::generateDemo(obdData);
       AlertLevel alert = AlertManager::evaluate(obdData);
       if (millis() - lastDisplayMs > 80) {
         lastDisplayMs = millis();
@@ -224,25 +206,13 @@ void loop() {
 
     // ── MONITORING ───────────────────────────────────────────
     case STATE_MONITORING: {
-      // Verifica connessione
       if (!BleElm327::isConnected()) {
-        DisplayOled::showNoConnection();
-        BleElm327::autoReconnectLoop();
-        if (BleElm327::isConnected()) {
-          BleElm327::init();
-          AlertManager::beepConfirm();
-        }
-        delay(50);
+        // Connessione persa → torna a riconnettere (web resta su)
+        appState = STATE_BLE_CONNECT;
         break;
       }
-
-      // Poll dati OBD
       OBDDecoder::pollAll(obdData, ProfileLoader::hasExtended());
-
-      // Valuta alert
       AlertLevel alert = AlertManager::evaluate(obdData);
-
-      // Render display
       if (millis() - lastDisplayMs > 80) {  // ~12fps
         lastDisplayMs = millis();
         DisplayOled::showData(obdData, DisplayOled::currentScreen(), alert);
