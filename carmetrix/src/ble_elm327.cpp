@@ -90,8 +90,33 @@ bool BleElm327::connect(const char* mac) {
     bleClient->setClientCallbacks(&clientCb);
   }
 
-  BLEAddress addr(mac);
-  if (!bleClient->connect(addr)) {
+  // Scan per trovare il dispositivo e usare il suo ADDRESS TYPE corretto.
+  // Molti adattatori usano indirizzi "random": connettersi col MAC come
+  // "public" fallisce in silenzio. Connettendoci tramite l'oggetto trovato
+  // nello scan usiamo il tipo giusto, e verifichiamo che stia trasmettendo.
+  Serial.printf("[BLE] Scan per %s...\n", mac);
+  BLEScan* scan = BLEDevice::getScan();
+  scan->setActiveScan(true);
+  scan->setInterval(100);
+  scan->setWindow(99);
+  BLEScanResults* found = scan->start(5, false);
+
+  static BLEAdvertisedDevice target;
+  bool haveTarget = false;
+  String want = String(mac); want.toLowerCase();
+  for (int i = 0; i < found->getCount(); i++) {
+    BLEAdvertisedDevice d = found->getDevice(i);
+    String a = String(d.getAddress().toString().c_str()); a.toLowerCase();
+    if (a == want) { target = d; haveTarget = true; break; }
+  }
+  scan->clearResults();
+
+  if (!haveTarget) {
+    Serial.println("[BLE] non in advertising (spento? gia' connesso al telefono?)");
+    return false;
+  }
+
+  if (!bleClient->connect(&target)) {   // usa l'address type corretto
     Serial.println("[BLE] connect() fallita");
     return false;
   }
