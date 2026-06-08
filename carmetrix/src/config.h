@@ -5,7 +5,7 @@
 //  Pin definitions, costanti globali, versione firmware
 // ============================================================
 
-#define CARMETRIX_VERSION "0.2.3"
+#define CARMETRIX_VERSION "0.2.4"
 
 // ── OTA da GitHub ────────────────────────────────────────────
 // Il web app interroga le Release di questo repo per nuovi firmware.
@@ -27,7 +27,11 @@
 #define WEB_PORT         80
 
 // ── BLE / ELM327 ─────────────────────────────────────────────
-// UUID servizio Vgate iCar Pro
+// UUID di riferimento (NON usati per il match: facciamo auto-discovery).
+//  - Cloni generici:        servizio FFF0, notify FFF1, write FFF2
+//  - Vgate iCar Pro BLE:     servizio 18F0, notify 2AF0, write 2AF1
+//  - Moduli HM-10:           servizio FFE0, char FFE1 (write+notify)
+// Il firmware enumera i servizi e trova da solo NOTIFY + WRITE.
 #define BLE_SERVICE_UUID  "0000FFF0-0000-1000-8000-00805F9B34FB"
 #define BLE_CHAR_WRITE    "0000FFF2-0000-1000-8000-00805F9B34FB"
 #define BLE_CHAR_NOTIFY   "0000FFF1-0000-1000-8000-00805F9B34FB"

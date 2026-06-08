@@ -5,11 +5,13 @@
 #include <BLEScan.h>
 #include <BLEClient.h>
 #include <BLERemoteCharacteristic.h>
+#include <map>
 
 // ── Stato interno ────────────────────────────────────────────
 static BLEClient*               bleClient   = nullptr;
 static BLERemoteCharacteristic* charWrite   = nullptr;
 static BLERemoteCharacteristic* charNotify  = nullptr;
+static bool                     writeWithResponse = false;
 static volatile bool            connected   = false;
 static volatile bool            dataReady   = false;
 static String                   rxBuffer    = "";
@@ -94,28 +96,59 @@ bool BleElm327::connect(const char* mac) {
     return false;
   }
 
-  // Cerca servizio
-  BLERemoteService* svc = bleClient->getService(BLE_SERVICE_UUID);
-  if (!svc) {
-    Serial.println("[BLE] Servizio FFF0 non trovato");
-    bleClient->disconnect();
-    return false;
-  }
+  Serial.println("[BLE] Connesso (GAP). Discovery servizi...");
 
-  charWrite  = svc->getCharacteristic(BLE_CHAR_WRITE);
-  charNotify = svc->getCharacteristic(BLE_CHAR_NOTIFY);
+  // ── AUTO-DISCOVERY ───────────────────────────────────────
+  // Niente UUID hardcodati: enumeriamo i servizi e troviamo da soli
+  // una caratteristica NOTIFY (lettura) e una WRITE (comandi).
+  // Funziona con Vgate iCar Pro (18F0/2AF0/2AF1), cloni FFF0/FFF1/FFF2,
+  // FFE0/FFE1 e qualunque altra variante ELM327 BLE.
+  charWrite  = nullptr;
+  charNotify = nullptr;
+
+  std::map<std::string, BLERemoteService*>* services = bleClient->getServices();
+  if (services) {
+    for (auto& sPair : *services) {
+      BLERemoteService* svc = sPair.second;
+      Serial.printf("[BLE] Servizio %s\n", svc->getUUID().toString().c_str());
+
+      BLERemoteCharacteristic* w = nullptr;
+      BLERemoteCharacteristic* n = nullptr;
+      std::map<std::string, BLERemoteCharacteristic*>* chars = svc->getCharacteristics();
+      if (chars) {
+        for (auto& cPair : *chars) {
+          BLERemoteCharacteristic* ch = cPair.second;
+          Serial.printf("[BLE]   char %s  [%s%s%s%s]\n",
+            ch->getUUID().toString().c_str(),
+            ch->canRead()           ? "R" : "",
+            ch->canWrite()          ? "W" : "",
+            ch->canWriteNoResponse()? "w" : "",
+            ch->canNotify()         ? "N" : "");
+          if (!n && (ch->canNotify() || ch->canIndicate()))    n = ch;
+          if (!w && (ch->canWrite() || ch->canWriteNoResponse())) w = ch;
+        }
+      }
+      if (w && n) { charWrite = w; charNotify = n; break; }
+    }
+  }
 
   if (!charWrite || !charNotify) {
-    Serial.println("[BLE] Characteristics non trovate");
+    Serial.println("[BLE] Nessun servizio con NOTIFY+WRITE trovato");
     bleClient->disconnect();
     return false;
   }
 
-  if (charNotify->canNotify())
-    charNotify->registerForNotify(notifyCallback);
+  // Modalità di scrittura: usa write-with-response solo se supportata
+  writeWithResponse = charWrite->canWrite();
+  Serial.printf("[BLE] WRITE=%s (resp=%d)  NOTIFY=%s\n",
+    charWrite->getUUID().toString().c_str(), writeWithResponse,
+    charNotify->getUUID().toString().c_str());
+
+  if (charNotify->canNotify())        charNotify->registerForNotify(notifyCallback, true);
+  else if (charNotify->canIndicate()) charNotify->registerForNotify(notifyCallback, false);
 
   connected = true;
-  Serial.println("[BLE] Connesso");
+  Serial.println("[BLE] Pronto");
   return true;
 }
 
@@ -157,7 +190,7 @@ ElmResponse BleElm327::sendCommand(const char* cmd, uint32_t timeoutMs) {
   dataReady = false;
   rxBuffer  = "";
   String s  = String(cmd) + "\r";
-  charWrite->writeValue((uint8_t*)s.c_str(), s.length(), true);
+  charWrite->writeValue((uint8_t*)s.c_str(), s.length(), writeWithResponse);
 
   unsigned long t = millis();
   while (!dataReady && millis() - t < timeoutMs) delay(10);
