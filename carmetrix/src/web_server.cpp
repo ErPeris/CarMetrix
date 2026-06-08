@@ -33,6 +33,12 @@ void WebServer::begin() {
     Serial.println("[Web] LittleFS mount failed");
   }
 
+  // Le route si registrano una sola volta. Se l'AP viene riacceso
+  // (toggle config), basta riavviare il listener senza ri-registrare.
+  static bool routesDone = false;
+  if (routesDone) { server.begin(); return; }
+  routesDone = true;
+
   // ── Captive portal triggers (iOS, Android, Windows) ──────
   server.on("/hotspot-detect.html",       HTTP_GET, handleCaptive);
   server.on("/generate_204",              HTTP_GET, handleCaptive);

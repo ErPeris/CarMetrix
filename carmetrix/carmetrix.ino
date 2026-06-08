@@ -42,7 +42,7 @@ static CarMetrixConfig cfg;
 // ── Bottone ───────────────────────────────────────────────────
 static int  btnLast    = HIGH;
 static unsigned long btnPressedMs = 0;
-static bool btnLongFired = false;
+static bool beeped3s   = false;   // feedback raggiunti i 3s
 
 // ── Timing ───────────────────────────────────────────────────
 static unsigned long lastDisplayMs = 0;
@@ -51,40 +51,62 @@ static unsigned long bleConnectStartMs = 0;
 // ============================================================
 //  BUTTON HANDLER
 // ============================================================
+// Accende/spegne l'hotspot a seconda dello stato di destinazione.
+// AP ON in CONFIG e DEMO; OFF in BLE_CONNECT/MONITORING (radio libera al BLE).
+static void enterConfig() {
+  BleElm327::disconnect();
+  if (appState != STATE_DEMO) { WiFiPortal::begin(); WebServer::begin(); }
+  appState = STATE_CONFIG;
+  AlertManager::beepConfirm();
+}
+
+static void exitConfig() {
+  if (cfg.demoMode) {
+    appState = STATE_DEMO;                 // demo: AP resta acceso
+  } else if (cfg.bleMac[0]) {
+    WebServer::stop(); WiFiPortal::stop();  // spegni AP → radio al BLE
+    appState = STATE_BLE_CONNECT;
+    bleConnectStartMs = millis();
+  } else {
+    return;  // non configurato: resta in CONFIG
+  }
+  AlertManager::beepConfirm();
+}
+
 static void handleButton() {
   int st = digitalRead(PIN_BUTTON);
+  unsigned long now = millis();
 
-  // Pressione inizia
-  if (st == LOW && btnLast == HIGH) {
-    btnPressedMs  = millis();
-    btnLongFired  = false;
+  if (st == LOW && btnLast == HIGH) {       // inizio pressione
+    btnPressedMs = now;
+    beeped3s = false;
   }
 
-  // Pressione lunga → entra/esci dalla schermata CONFIG.
-  // L'hotspot + web sono SEMPRE attivi: qui cambia solo cosa fa il device.
-  if (st == LOW && !btnLongFired &&
-      millis() - btnPressedMs > BTN_LONG_PRESS) {
-    btnLongFired = true;
-    if (appState != STATE_CONFIG) {
-      // Entra in CONFIG: ferma i tentativi BLE, mostra schermata setup
-      BleElm327::disconnect();
-      appState = STATE_CONFIG;
+  if (st == LOW) {                          // mentre è premuto
+    unsigned long held = now - btnPressedMs;
+    if (!beeped3s && held >= BTN_LONG_PRESS) {
+      beeped3s = true;                      // segnala "config armato"
       AlertManager::beepConfirm();
-    } else {
-      // Esci da CONFIG: riprendi l'attività
-      if (cfg.demoMode)         appState = STATE_DEMO;
-      else if (cfg.bleMac[0])   { appState = STATE_BLE_CONNECT; bleConnectStartMs = millis(); }
-      // (se non configurato resta in CONFIG)
-      AlertManager::beepConfirm();
+    }
+    if (held >= BTN_FACTORY_RESET) {        // 6s → reset di fabbrica
+      DisplayOled::showMessage("FACTORY RESET", "dimentico tutto");
+      AlertManager::beepError();
+      NVSConfig::reset();
+      delay(1000);
+      ESP.restart();
     }
   }
 
-  // Click corto in MONITORING / DEMO → cambia schermata
-  if (st == HIGH && btnLast == LOW &&
-      millis() - btnPressedMs < BTN_LONG_PRESS &&
-      millis() - btnPressedMs > BTN_DEBOUNCE) {
-    if (appState == STATE_MONITORING || appState == STATE_DEMO) {
-      DisplayOled::nextScreen();
+  if (st == HIGH && btnLast == LOW) {       // rilascio
+    unsigned long held = now - btnPressedMs;
+    if (held > BTN_DEBOUNCE && held < BTN_LONG_PRESS) {
+      // click corto → cambia schermata
+      if (appState == STATE_MONITORING || appState == STATE_DEMO)
+        DisplayOled::nextScreen();
+    } else if (held >= BTN_LONG_PRESS && held < BTN_FACTORY_RESET) {
+      // 3-6s → entra/esci CONFIG
+      if (appState == STATE_CONFIG) exitConfig();
+      else                          enterConfig();
     }
   }
 
@@ -115,23 +137,23 @@ void setup() {
   // La dashboard web legge sempre da questa struttura
   WebServer::setLiveData(&obdData);
 
-  // Hotspot + web server SEMPRE attivi, in ogni stato → mai tagliato fuori.
-  // Il server è asincrono (task separato): risponde anche durante i
-  // tentativi di connessione BLE bloccanti.
-  WiFiPortal::begin();
-  WebServer::begin();
-
+  // L'hotspot si accende solo dove serve (CONFIG/DEMO). Durante il BLE
+  // resta SPENTO così l'antenna è tutta per la connessione (C3 mono-radio).
   if (cfg.demoMode) {
     Serial.println("[Main] DEMO MODE");
     OBDDecoder::reset(obdData);
+    WiFiPortal::begin();
+    WebServer::begin();
     appState = STATE_DEMO;
   } else if (!NVSConfig::isConfigured()) {
     Serial.println("[Main] Prima configurazione");
+    WiFiPortal::begin();
+    WebServer::begin();
     appState = STATE_CONFIG;
   } else {
     Serial.printf("[Main] Config OK: %s / %s\n", cfg.carBrand, cfg.bleMac);
     ProfileLoader::load(cfg.carProfile);
-    appState = STATE_BLE_CONNECT;
+    appState = STATE_BLE_CONNECT;   // AP spento, radio libera al BLE
     bleConnectStartMs = millis();
   }
 }
@@ -152,10 +174,12 @@ static void serviceGithubOTA() {
 void loop() {
   handleButton();
 
-  // AP/web SEMPRE attivi → questi girano in qualunque stato
-  WiFiPortal::loop();          // captive portal DNS
-  serviceGithubOTA();          // agisce solo se richiesto via web
-  AlertManager::serviceTest(); // agisce solo se richiesto via web
+  // Servizi che richiedono l'AP: solo dove l'hotspot è acceso
+  if (appState == STATE_CONFIG || appState == STATE_DEMO) {
+    WiFiPortal::loop();          // captive portal DNS
+    serviceGithubOTA();          // agisce solo se richiesto via web
+    AlertManager::serviceTest(); // agisce solo se richiesto via web
+  }
 
   switch (appState) {
 
@@ -170,8 +194,18 @@ void loop() {
       }
       break;
 
-    // ── CONNESSIONE BLE (web resta raggiungibile) ────────────
+    // ── CONNESSIONE BLE (AP spento, radio al BLE) ────────────
     case STATE_BLE_CONNECT: {
+      // Timeout: se non si aggancia, riaccende l'hotspot e torna in CONFIG
+      if (millis() - bleConnectStartMs > BLE_CONNECT_GIVEUP) {
+        Serial.println("[Main] Timeout BLE → CONFIG");
+        WiFiPortal::begin();
+        WebServer::begin();
+        appState = STATE_CONFIG;
+        AlertManager::beepError();
+        break;
+      }
+
       if (millis() - lastDisplayMs > 500) {
         lastDisplayMs = millis();
         DisplayOled::showConnecting(cfg.bleMac[0] ? cfg.bleMac : "Searching...");
@@ -207,8 +241,9 @@ void loop() {
     // ── MONITORING ───────────────────────────────────────────
     case STATE_MONITORING: {
       if (!BleElm327::isConnected()) {
-        // Connessione persa → torna a riconnettere (web resta su)
+        // Connessione persa → torna a riconnettere (riarma il timeout)
         appState = STATE_BLE_CONNECT;
+        bleConnectStartMs = millis();
         break;
       }
       OBDDecoder::pollAll(obdData, ProfileLoader::hasExtended());

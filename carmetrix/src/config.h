@@ -5,7 +5,7 @@
 //  Pin definitions, costanti globali, versione firmware
 // ============================================================
 
-#define CARMETRIX_VERSION "0.2.5"
+#define CARMETRIX_VERSION "0.2.6"
 
 // ── OTA da GitHub ────────────────────────────────────────────
 // Il web app interroga le Release di questo repo per nuovi firmware.
@@ -52,8 +52,14 @@
 #define BUZZER_RESOLUTION 8     // bit PWM
 
 // ── Bottone ──────────────────────────────────────────────────
-#define BTN_DEBOUNCE    200   // ms
-#define BTN_LONG_PRESS  3000  // ms → entra in CONFIG MODE
+#define BTN_DEBOUNCE      200   // ms
+#define BTN_LONG_PRESS    3000  // ms → entra/esce CONFIG MODE
+#define BTN_FACTORY_RESET 6000  // ms → reset di fabbrica (dimentica tutto)
+
+// ── Timeout connessione BLE ──────────────────────────────────
+// Se non si connette entro questo tempo, riaccende l'hotspot
+// e torna in CONFIG così l'utente riprende il controllo.
+#define BLE_CONNECT_GIVEUP 60000  // ms
 
 // ── OLED layout (bicolore 128x64) ────────────────────────────
 #define OLED_YEL_BASE   9

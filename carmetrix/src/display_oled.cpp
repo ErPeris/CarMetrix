@@ -141,13 +141,17 @@ void DisplayOled::showConfigMode(const char* ssid, const char* ip) {
 void DisplayOled::showConnecting(const char* deviceName) {
   u8g2.clearBuffer();
   u8g2.setFont(FONT_UNIT);
-  u8g2.drawStr(2, OLED_YEL_BASE, "CONNECTING...");
-  u8g2.drawStr(0, 30, deviceName);
-  // Animazione pallini
+  u8g2.drawStr(2, OLED_YEL_BASE, "CONNECTING");
+  // Animazione pallini nella gialla
   int dots = (millis() / 400) % 4;
   char buf[5] = "";
   for (int i = 0; i < dots; i++) strcat(buf, ".");
-  u8g2.drawStr(0, 44, buf);
+  u8g2.drawStr(86, OLED_YEL_BASE, buf);
+
+  u8g2.drawStr(0, 28, deviceName);
+  // Promemoria comandi pulsante
+  u8g2.drawStr(0, 46, "3s = CONFIG");
+  u8g2.drawStr(0, 60, "6s = RESET");
   u8g2.sendBuffer();
 }
 
