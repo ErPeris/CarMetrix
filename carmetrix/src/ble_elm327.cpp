@@ -18,6 +18,7 @@ static String                   rxBuffer    = "";
 static String                   lastResponse = "";
 static String                   lastCmdSent  = "";
 static bool                     elmInitOk    = false;
+static bool                     ecuResponding = false;
 static uint8_t                  detectedProtocol = 0;
 static unsigned long            lastReconnectMs  = 0;
 
@@ -240,14 +241,19 @@ bool BleElm327::init() {
   delay(100);
   sendCommand("ATZ",   3000);  // reset — risposta lenta
   delay(500);
-  sendCommand("ATE0");  // echo off
-  sendCommand("ATL0");  // linefeeds off
-  sendCommand("ATS0");  // spaces off (risposta più compatta)
-  sendCommand("ATH0");  // headers off
+  sendCommand("ATE0");   // echo off
+  sendCommand("ATL0");   // linefeeds off
+  sendCommand("ATS0");   // spaces off (risposta più compatta)
+  sendCommand("ATH0");   // headers off
+  sendCommand("ATAT1");  // adaptive timing → meno "NO DATA" da ECU lente
   auto r = sendCommand("ATSP0");  // auto-detect protocollo
   elmInitOk = r.ok;
-  if (!r.ok) { Serial.println("[ELM] Init fallita"); return false; }
-  Serial.println("[ELM] Init OK");
+  if (!r.ok) { Serial.println("[ELM] Init fallita"); ecuResponding = false; return false; }
+
+  // Prime: forza la detection del protocollo e verifica se la centralina risponde
+  auto probe = queryPID(0x01, 0x00);   // "PID supportati 01-20"
+  ecuResponding = probe.ok && probe.len > 0;
+  Serial.printf("[ELM] Init OK. ECU %s\n", ecuResponding ? "risponde" : "MUTA");
   return true;
 }
 
@@ -338,3 +344,4 @@ uint8_t BleElm327::getDetectedProtocol() { return detectedProtocol; }
 String BleElm327::lastCmd() { return lastCmdSent; }
 String BleElm327::lastRaw() { return lastResponse; }
 bool   BleElm327::initOk()  { return elmInitOk; }
+bool   BleElm327::ecuOk()   { return ecuResponding; }

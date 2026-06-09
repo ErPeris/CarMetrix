@@ -51,4 +51,5 @@ namespace BleElm327 {
   String lastCmd();
   String lastRaw();
   bool   initOk();
+  bool   ecuOk();    // true se la centralina ha risposto a 0100
 }

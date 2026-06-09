@@ -241,8 +241,10 @@ void DisplayOled::showData(const OBDData& data, OledScreen scr, AlertLevel alert
       const char* msg = "NO CONNECTION";
       u8g2.drawStr((128 - u8g2.getStrWidth(msg)) / 2, 40, msg);
     } else {
-      // Diagnostica: cosa abbiamo chiesto e cosa ha risposto l'ELM327
-      u8g2.drawStr(2, 26, BleElm327::initOk() ? "INIT OK" : "INIT FAIL");
+      // Diagnostica: stato init + se la centralina risponde, comando e risposta
+      String st = String(BleElm327::initOk() ? "INIT OK" : "INIT FAIL");
+      st += BleElm327::ecuOk() ? "  ECU:OK" : "  ECU:--";
+      u8g2.drawStr(2, 26, st.c_str());
       String tx = "TX:" + BleElm327::lastCmd();
       u8g2.drawStr(2, 40, tx.c_str());
       String rx = BleElm327::lastRaw();
