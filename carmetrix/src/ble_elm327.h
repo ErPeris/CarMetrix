@@ -46,4 +46,9 @@ namespace BleElm327 {
 
   // Protocollo rilevato dopo ATSP0 (0 = non ancora rilevato)
   uint8_t getDetectedProtocol();
+
+  // Diagnostica: ultimo comando inviato e ultima risposta grezza ELM
+  String lastCmd();
+  String lastRaw();
+  bool   initOk();
 }

@@ -237,9 +237,20 @@ void DisplayOled::showData(const OBDData& data, OledScreen scr, AlertLevel alert
 
   if (!valid) {
     u8g2.setFont(FONT_UNIT);
-    const char* msg = BleElm327::isConnected() ? "WAITING..." : "NO CONNECTION";
-    int w = u8g2.getStrWidth(msg);
-    u8g2.drawStr((128 - w) / 2, 40, msg);
+    if (!BleElm327::isConnected()) {
+      const char* msg = "NO CONNECTION";
+      u8g2.drawStr((128 - u8g2.getStrWidth(msg)) / 2, 40, msg);
+    } else {
+      // Diagnostica: cosa abbiamo chiesto e cosa ha risposto l'ELM327
+      u8g2.drawStr(2, 26, BleElm327::initOk() ? "INIT OK" : "INIT FAIL");
+      String tx = "TX:" + BleElm327::lastCmd();
+      u8g2.drawStr(2, 40, tx.c_str());
+      String rx = BleElm327::lastRaw();
+      rx.replace("\r", " "); rx.replace("\n", " ");
+      if (rx.length() == 0) rx = "(nessuna risposta)";
+      if (rx.length() > 19)  rx = rx.substring(0, 19);
+      u8g2.drawStr(2, 54, ("RX:" + rx).c_str());
+    }
   } else {
     drawBigValue(val, dec);
     drawGauge(val, mn, mx, sub, alert);

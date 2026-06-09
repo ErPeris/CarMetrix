@@ -5,7 +5,7 @@
 //  Pin definitions, costanti globali, versione firmware
 // ============================================================
 
-#define CARMETRIX_VERSION "0.2.7"
+#define CARMETRIX_VERSION "0.2.8"
 
 // ── OTA da GitHub ────────────────────────────────────────────
 // Il web app interroga le Release di questo repo per nuovi firmware.
@@ -39,7 +39,7 @@
 #define BLE_SCAN_DURATION   8     // secondi scan iniziale
 #define BLE_CONNECT_TIMEOUT 10000 // ms timeout connessione
 #define BLE_RECONNECT_EVERY 3000  // ms tra tentativi riconnessione
-#define ELM_CMD_TIMEOUT     2000  // ms attesa risposta AT command
+#define ELM_CMD_TIMEOUT     5000  // ms — generoso per la ricerca protocollo (SEARCHING)
 
 // ── OBD polling ──────────────────────────────────────────────
 #define OBD_POLL_INTERVAL  250    // ms tra poll (4 volte/sec)

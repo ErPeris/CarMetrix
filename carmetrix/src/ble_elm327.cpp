@@ -16,6 +16,8 @@ static volatile bool            connected   = false;
 static volatile bool            dataReady   = false;
 static String                   rxBuffer    = "";
 static String                   lastResponse = "";
+static String                   lastCmdSent  = "";
+static bool                     elmInitOk    = false;
 static uint8_t                  detectedProtocol = 0;
 static unsigned long            lastReconnectMs  = 0;
 
@@ -214,6 +216,7 @@ ElmResponse BleElm327::sendCommand(const char* cmd, uint32_t timeoutMs) {
 
   dataReady = false;
   rxBuffer  = "";
+  lastCmdSent = cmd;
   String s  = String(cmd) + "\r";
   charWrite->writeValue((uint8_t*)s.c_str(), s.length(), writeWithResponse);
 
@@ -242,6 +245,7 @@ bool BleElm327::init() {
   sendCommand("ATS0");  // spaces off (risposta più compatta)
   sendCommand("ATH0");  // headers off
   auto r = sendCommand("ATSP0");  // auto-detect protocollo
+  elmInitOk = r.ok;
   if (!r.ok) { Serial.println("[ELM] Init fallita"); return false; }
   Serial.println("[ELM] Init OK");
   return true;
@@ -330,3 +334,7 @@ uint32_t BleElm327::getSupportedPIDs(uint8_t group) {
 }
 
 uint8_t BleElm327::getDetectedProtocol() { return detectedProtocol; }
+
+String BleElm327::lastCmd() { return lastCmdSent; }
+String BleElm327::lastRaw() { return lastResponse; }
+bool   BleElm327::initOk()  { return elmInitOk; }
