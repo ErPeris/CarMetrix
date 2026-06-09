@@ -32,6 +32,7 @@ namespace ProfileLoader {
 
   // Accesso dati caricati
   const char*                    getBrand();
+  const char*                    getProtocol();   // ATSP, "0" = auto
   const std::vector<ExtendedPID>& getExtendedPIDs();
   bool                           hasExtended();
 }

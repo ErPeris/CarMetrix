@@ -153,6 +153,7 @@ void setup() {
   } else {
     Serial.printf("[Main] Config OK: %s / %s\n", cfg.carBrand, cfg.bleMac);
     ProfileLoader::load(cfg.carProfile);
+    BleElm327::setProtocol(ProfileLoader::getProtocol());  // es. Honda → ATSP6
     appState = STATE_BLE_CONNECT;   // AP spento, radio libera al BLE
     bleConnectStartMs = millis();
   }

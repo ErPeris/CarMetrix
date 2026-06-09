@@ -1,6 +1,7 @@
 {
   "brand": "Honda",
   "description": "Honda / Acura — Mode 22 PIDs. Testato su Civic 1.5T (FK7/FK8), CR-V, HR-V turbo.",
+  "protocol": "6",
   "mode": "22",
   "pids": [
     {

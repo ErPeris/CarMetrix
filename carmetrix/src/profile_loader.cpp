@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 
 static String                        loadedBrand;
+static String                        loadedProtocol = "0";   // ATSP, "0" = auto
 static std::vector<ProfileLoader::ExtendedPID> extPIDs;
 static bool                          loaded = false;
 
@@ -45,7 +46,8 @@ bool ProfileLoader::load(const char* profileFile) {
     return false;
   }
 
-  loadedBrand = doc["brand"] | "Generic";
+  loadedBrand    = doc["brand"]    | "Generic";
+  loadedProtocol = doc["protocol"] | "0";   // es. "6" = CAN 11bit 500k
 
   // Carica PID estesi (Mode 22), presenti solo nei profili produttore
   JsonArray pids = doc["pids"].as<JsonArray>();
@@ -77,6 +79,10 @@ void ProfileLoader::unload() {
 
 const char* ProfileLoader::getBrand() {
   return loadedBrand.c_str();
+}
+
+const char* ProfileLoader::getProtocol() {
+  return loadedProtocol.c_str();
 }
 
 const std::vector<ProfileLoader::ExtendedPID>& ProfileLoader::getExtendedPIDs() {

@@ -52,4 +52,5 @@ namespace BleElm327 {
   String lastRaw();
   bool   initOk();
   bool   ecuOk();    // true se la centralina ha risposto a 0100
+  void   setProtocol(const char* p);  // forza ATSP<p> (da profilo); "0" = auto
 }
