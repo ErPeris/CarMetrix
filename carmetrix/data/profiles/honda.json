@@ -1,7 +1,7 @@
 {
   "brand": "Honda",
-  "description": "Honda / Acura — Mode 22 PIDs. Testato su Civic 1.5T (FK7/FK8), CR-V, HR-V turbo.",
-  "protocol": "6",
+  "description": "Honda / Acura — CAN 29-bit (ISO 15765-4). Civic 1.5T CVT, CR-V, HR-V. Protocollo ATSP7 (confermato da Car Scanner: 'AT/CVT CAN 29bit').",
+  "protocol": "7",
   "mode": "22",
   "pids": [
     {
