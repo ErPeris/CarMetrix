@@ -23,6 +23,10 @@ static String                   forcedProtocol = "0";   // ATSP, "0" = auto
 static uint8_t                  detectedProtocol = 0;
 static unsigned long            lastReconnectMs  = 0;
 
+// Forward declaration (definita nella sezione PID QUERY)
+static bool extractBytes(const String& raw, const String& respHeaderHex,
+                         uint8_t* out, uint8_t& outLen);
+
 // ── Callback notifica BLE ────────────────────────────────────
 static void notifyCallback(BLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
   for (size_t i = 0; i < len; i++) {
@@ -248,22 +252,32 @@ bool BleElm327::init() {
   sendCommand("ATH0");   // headers off
   sendCommand("ATAT1");  // adaptive timing → meno "NO DATA" da ECU lente
 
-  // Protocollo del profilo (es. Honda "6" = CAN 11bit 500k), default auto
+  // Protocollo del profilo (es. Honda "7" = CAN 29bit 500k), default auto
   String sp = "ATSP" + forcedProtocol;
   auto r = sendCommand(sp.c_str());
   elmInitOk = r.ok;
   if (!r.ok) { Serial.println("[ELM] Init fallita"); ecuResponding = false; return false; }
 
-  // Verifica se la centralina risponde (probe 0100 = PID supportati)
-  auto probe = queryPID(0x01, 0x00);
-  ecuResponding = probe.ok && probe.len > 0;
+  // CAN 29-bit: i cloni spesso NON impostano da soli l'header funzionale
+  // OBD (ISO 15765-4: richiesta 0x18DB33F1). Lo forziamo esplicitamente:
+  // ATCP = byte di priorità (18), ATSH = restanti 24 bit (DB33F1).
+  if (forcedProtocol == "7" || forcedProtocol == "9") {
+    sendCommand("ATCP18");
+    sendCommand("ATSHDB33F1");
+  }
+
+  // Probe: la centralina risponde? (0100 = PID supportati). Timeout lungo:
+  // la prima query su bus freddo / ricerca protocollo può superare i 5s.
+  uint8_t buf[8]; uint8_t blen = 0;
+  auto probe = sendCommand("0100", 10000);
+  ecuResponding = probe.ok && extractBytes(probe.raw, "4100", buf, blen);
 
   // Fallback: se il protocollo forzato non risponde, prova l'auto-detect
   if (!ecuResponding && forcedProtocol != "0") {
     Serial.println("[ELM] Protocollo forzato muto → provo ATSP0 auto");
     sendCommand("ATSP0");
-    probe = queryPID(0x01, 0x00);
-    ecuResponding = probe.ok && probe.len > 0;
+    probe = sendCommand("0100", 10000);
+    ecuResponding = probe.ok && extractBytes(probe.raw, "4100", buf, blen);
   }
 
   Serial.printf("[ELM] Init OK (ATSP%s). ECU %s\n",

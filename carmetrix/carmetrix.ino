@@ -159,6 +159,33 @@ void setup() {
   }
 }
 
+// ── Ponte seriale → ELM (diagnosi col portatile in auto) ─────
+// Scrivi un comando nel Serial Monitor (es. ATSP7, ATSHDB33F1, 0100,
+// 010C) e vedi la risposta grezza dell'adattatore. Linea che inizia
+// con '!' = comandi locali: !state (stato), !init (rifa' l'init ELM).
+static void serviceSerialBridge() {
+  if (!Serial.available()) return;
+  String line = Serial.readStringUntil('\n');
+  line.trim();
+  if (line.length() == 0) return;
+
+  if (line == "!state") {
+    Serial.printf("[i] state=%d  ble=%d  init=%d  ecu=%d\n",
+      (int)appState, BleElm327::isConnected(),
+      BleElm327::initOk(), BleElm327::ecuOk());
+    return;
+  }
+  if (line == "!init") {
+    Serial.println("[i] re-init ELM...");
+    BleElm327::init();
+    return;
+  }
+  if (!BleElm327::isConnected()) { Serial.println("[i] BLE non connesso"); return; }
+  Serial.printf(">> %s\n", line.c_str());
+  auto r = BleElm327::sendCommand(line.c_str(), 10000);
+  Serial.printf("<< %s\n", r.raw.length() ? r.raw.c_str() : "(timeout)");
+}
+
 // ── OTA GitHub: eseguito nel loop (bloccante) quando richiesto ──
 static void serviceGithubOTA() {
   if (!GithubOTA::isRequested()) return;
@@ -174,6 +201,7 @@ static void serviceGithubOTA() {
 // ============================================================
 void loop() {
   handleButton();
+  serviceSerialBridge();   // terminale AT via USB (sempre attivo)
 
   // Servizi che richiedono l'AP: solo dove l'hotspot è acceso
   if (appState == STATE_CONFIG || appState == STATE_DEMO) {
