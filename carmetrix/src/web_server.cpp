@@ -16,7 +16,6 @@
 static AsyncWebServer server(WEB_PORT);
 static void (*savedCallback)() = nullptr;
 static bool      otaInProgress = false;
-static OBDData*  liveData      = nullptr;
 
 // ── Helper: risposta JSON ────────────────────────────────────
 static void jsonReply(AsyncWebServerRequest* req, int code, const String& body) {
@@ -168,33 +167,6 @@ void WebServer::begin() {
     doc["ghRepo"]      = GITHUB_REPO;
     doc["homeSsid"]    = cfg.homeSsid;
     doc["hasWifiPass"] = (cfg.homePass[0] != '\0');  // non esporre la password
-    String out;
-    serializeJson(doc, out);
-    jsonReply(req, 200, out);
-  });
-
-  // ─────────────────────────────────────────────────────────
-  //  API: dati live (dashboard) — legge la struttura del main
-  // ─────────────────────────────────────────────────────────
-  server.on("/api/live", HTTP_GET, [](AsyncWebServerRequest* req) {
-    JsonDocument doc;
-    if (liveData) {
-      auto add = [&](const char* key, const OBDValue& v) {
-        JsonObject o = doc[key].to<JsonObject>();
-        o["v"]     = round(v.value * 100) / 100.0;
-        o["valid"] = v.valid;
-      };
-      add("iat",     liveData->iat);
-      add("boost",   liveData->boost);
-      add("trans",   liveData->transTemp);
-      add("oil",     liveData->oilTemp);
-      add("soc",     liveData->hvSoc);
-      add("hvtemp",  liveData->hvTemp);
-      add("coolant", liveData->coolant);
-      add("rpm",     liveData->rpm);
-      add("speed",   liveData->speed);
-      doc["age"] = (millis() - liveData->lastUpdateMs);
-    }
     String out;
     serializeJson(doc, out);
     jsonReply(req, 200, out);
@@ -425,8 +397,4 @@ void WebServer::stop() {
 
 void WebServer::onConfigSaved(void (*cb)()) {
   savedCallback = cb;
-}
-
-void WebServer::setLiveData(OBDData* data) {
-  liveData = data;
 }

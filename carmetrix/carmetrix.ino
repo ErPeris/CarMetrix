@@ -170,9 +170,6 @@ void setup() {
     ESP.restart();
   });
 
-  // La dashboard web legge sempre da questa struttura
-  WebServer::setLiveData(&obdData);
-
   // L'hotspot si accende solo dove serve (CONFIG/DEMO). Durante il BLE
   // resta SPENTO così l'antenna è tutta per la connessione (C3 mono-radio).
   if (cfg.demoMode) {
