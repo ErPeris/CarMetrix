@@ -16,7 +16,23 @@ parametri del veicolo con allarmi configurabili (buzzer + flash). Configurazione
 - Repo: https://github.com/ErPeris/CarMetrix (git user: ErPeris / demolischer250@gmail.com — config locale)
 - In arrivo: display TFT (ILI9341 2.4" touch, ST7789 1.69", GC9A01 rotondo), ESP32-S3 N16R8
 
-## ⚠️ STATO ATTUALE (v0.3.5+db + fase A + session/fc, giugno 2026, DA TESTARE)
+## ⚠️ STATO ATTUALE (v0.3.6 rilasciata + token OTA NVS, giugno 2026)
+
+**v0.3.6 PUBBLICATA su GitHub** (Fase A + session/fc Mode 22 + OTA repo privata
+via secrets.h). Build 1.691.649 byte (86%). `releases/latest` = v0.3.6.
+
+**Token OTA in NVS (12 giugno 2026, sopra v0.3.6, DA COMPILARE/RILASCIARE):**
+Il GitHub token per l'OTA da repo privata si imposta dalla **tab Update** della
+web app (`hasGithubToken`, mai esposto — pattern di `homePass`), salvato in NVS
+(`CarMetrixConfig.githubToken[128]`). `github_ota` lo legge a runtime con
+**fallback al macro `GITHUB_TOKEN` di secrets.h**. Vantaggio sul compile-time:
+il token **sopravvive agli OTA** e i `.bin` rilasciati restano puliti (nessun
+ricompila-col-segreto a ogni release). ⚠️ NVS: blob cambiato (+128 byte) →
+**setup da rifare dopo il flash**.
+**Sequenza per rendere la repo privata** (scelta utente): rilasciare/flashare
+questa build → impostare il token dalla web app → POI rendere la repo privata.
+
+## STATO precedente (v0.3.5+db + fase A + session/fc)
 
 **Profilo connessione dato-guidato (12 giugno 2026, da compilare/testare):**
 Schema 2 ora supporta due campi **opzionali** per-PID per abilitare il Mode 22
