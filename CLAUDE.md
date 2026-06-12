@@ -16,7 +16,21 @@ parametri del veicolo con allarmi configurabili (buzzer + flash). Configurazione
 - Repo: https://github.com/ErPeris/CarMetrix (git user: ErPeris / demolischer250@gmail.com — config locale)
 - In arrivo: display TFT (ILI9341 2.4" touch, ST7789 1.69", GC9A01 rotondo), ESP32-S3 N16R8
 
-## ⚠️ STATO ATTUALE (v0.3.5+db + fase A, giugno 2026, DA TESTARE)
+## ⚠️ STATO ATTUALE (v0.3.5+db + fase A + session/fc, giugno 2026, DA TESTARE)
+
+**Profilo connessione dato-guidato (12 giugno 2026, da compilare/testare):**
+Schema 2 ora supporta due campi **opzionali** per-PID per abilitare il Mode 22
+via dati senza patch firmware:
+- `session`: sessione UDS (es. `"1003"`/`"10C0"`) inviata come query allo switch
+  di header verso quella ECU, risposta ignorata (il `StartCommand` di Car Scanner).
+- `fc`: header flow-control → il firmware emette `ATFCSH<fc>`+`ATFCSM1` per le
+  risposte multi-frame.
+Default vuoti = **invariato per i 172 profili OBDb** (solo switch header). La
+coda `queueHeaderSwitch` (obd_decoder) li accoda dopo ATSH/ATCRA, uno-per-tick.
+Fonti: analisi APK in `docs/superpowers/specs/2026-06-12-fase-b*`. `init()`
+(detect protocollo/physical addressing) resta in C++, fuori scope.
+**Da popolare sui profili manuali dopo verifica in auto col ponte seriale**
+(es. Civic `222201`: inviare `1003` poi `222201` e vedere se l'ATF risponde).
 
 **Fase A — quick win (12 giugno 2026, sopra v0.3.5+db, da compilare/testare):**
 1. **Pulsante reattivo**: `BTN_DEBOUNCE` 200→30ms — i tap veloci (<200ms)

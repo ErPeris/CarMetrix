@@ -115,6 +115,12 @@ Niente test automatici (firmware embedded). Verifica:
    osservare nel log la sequenza tick1-6 e una risposta `6222…` non più NO DATA
    (conferma il valore TRANS in Car Scanner come riferimento).
 
+**Follow-up in auto (manuale, fuori dal piano firmware).** Il valore concreto
+di `session`/`fc` per la Civic si scopre col **ponte seriale**: inviare a mano
+`1003` poi `222201` e vedere se l'ATF risponde (e con quale eventuale flow
+control). Se confermato, aggiungerlo a `profiles/honda/civic.json`, rigenerare
+il bundle col converter (`tools/obdb_to_profile.ps1`) e ricaricare LittleFS.
+
 ## Rischi e mitigazioni
 
 - **Coda più lunga** → switch di ECU leggermente più lento (5 tick invece di 2).
