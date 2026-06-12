@@ -249,12 +249,12 @@ CarMetrix/
 
 ## Build
 
-**arduino-cli FUNZIONA** (installata giugno 2026 in `C:\Users\aless\arduino-cli\`;
-NON è nel PATH delle shell non interattive → usare sempre il percorso completo;
-core esp32 3.3.10 condiviso con l'IDE in AppData\Local\Arduino15;
+**arduino-cli FUNZIONA** (in `C:\Users\aless\bin\arduino-cli\arduino-cli.exe`;
+anche nel PATH utente, ma non nelle shell non interattive → usare il percorso
+completo; core esp32 3.3.10 condiviso con l'IDE in AppData\Local\Arduino15;
 librerie in `C:\Users\aless\Documents\Arduino\libraries` — locale, fuori OneDrive):
 ```powershell
-& "C:\Users\aless\arduino-cli\arduino-cli.exe" compile --fqbn "esp32:esp32:esp32c3:PartitionScheme=min_spiffs,CDCOnBoot=cdc" --build-path "$env:LOCALAPPDATA\arduino\carmetrix-cli-build" --output-dir carmetrix\build carmetrix
+& "C:\Users\aless\bin\arduino-cli\arduino-cli.exe" compile --fqbn "esp32:esp32:esp32c3:PartitionScheme=min_spiffs,CDCOnBoot=cdc" --build-path "$env:LOCALAPPDATA\arduino\carmetrix-cli-build" --output-dir carmetrix\build carmetrix
 ```
 ⚠️ **SEMPRE con `--build-path` dedicato**: senza, arduino-cli usa la stessa cache
 dell'IDE (`AppData\Local\arduino\sketches\<hash>`) e una build CLI in parallelo a
