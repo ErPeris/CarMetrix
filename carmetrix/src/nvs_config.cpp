@@ -9,7 +9,10 @@ void NVSConfig::load(CarMetrixConfig& cfg) {
   prefs.begin(NS, true);
   size_t n = prefs.getBytes("cfg", &cfg, sizeof(cfg));
   prefs.end();
-  if (n == 0) memset(&cfg, 0, sizeof(cfg));  // nessun dato salvato
+  // Blob assente O di dimensione diversa (layout struct cambiato tra
+  // versioni, es. carProfile 48→64): i campi sarebbero disallineati →
+  // riparti da config vuota (setup da rifare, niente dati corrotti).
+  if (n != sizeof(cfg)) memset(&cfg, 0, sizeof(cfg));
 }
 
 void NVSConfig::save(const CarMetrixConfig& cfg) {

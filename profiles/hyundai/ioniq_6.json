@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Hyundai IONIQ 6","source":"OBDb/Hyundai-IONIQ-6","protocol":"6","pids":[{"cmd":"22E003","hdr":"744","name":"SOC","unit":"%","target":"hv_soc","bix":120,"len":8,"mul":0.5,"add":0,"min":0,"max":100,"every":4,"src":"IONIQ6_HVBAT_SOC_VCMS","rax":"74C"}]}

@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Hyundai Tucson Hybrid","source":"OBDb/Hyundai-Tucson-Hybrid","protocol":"6","pids":[{"cmd":"22ED02","hdr":"7E0","name":"OIL","unit":"°C","target":"oil_temp","bix":184,"len":8,"mul":1,"add":-4,"min":-40,"max":215,"every":4,"src":"TUCSONHYB_EOT","rax":"7E8"}]}

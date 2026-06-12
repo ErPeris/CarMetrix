@@ -22,6 +22,13 @@ static bool                     ecuResponding = false;
 static String                   forcedProtocol = "0";   // ATSP, "0" = auto
 static uint8_t                  detectedProtocol = 0;
 static unsigned long            lastReconnectMs  = 0;
+static volatile bool            asyncPending = false;
+static unsigned long            asyncStartMs = 0;
+static int                      ecuCount     = 0;   // ECU che rispondono a 0100
+static bool                     physicalAddressing = false;  // header fisico ECM attivo
+static String                   currentHdr   = "";  // header attivo ("" = default init)
+static String                   dfltCmds[3];        // AT per ripristinare il default
+static int                      dfltCmdCount = 0;
 
 // Forward declaration (definita nella sezione PID QUERY)
 static bool extractBytes(const String& raw, const String& respHeaderHex,
@@ -220,6 +227,7 @@ ElmResponse BleElm327::sendCommand(const char* cmd, uint32_t timeoutMs) {
 
   if (!isConnected() || !charWrite) return resp;
 
+  asyncPending = false;  // annulla eventuale query async in volo
   dataReady = false;
   rxBuffer  = "";
   lastCmdSent = cmd;
@@ -241,8 +249,90 @@ ElmResponse BleElm327::sendCommand(const char* cmd, uint32_t timeoutMs) {
   return resp;
 }
 
+// ── API asincrona: invia e torna subito, il loop interroga pollAsync ──
+bool BleElm327::sendAsync(const char* cmd) {
+  if (!isConnected() || !charWrite) return false;
+  dataReady = false;
+  rxBuffer  = "";
+  lastCmdSent = cmd;
+  String s = String(cmd) + "\r";
+  charWrite->writeValue((uint8_t*)s.c_str(), s.length(), writeWithResponse);
+  asyncPending = true;
+  asyncStartMs = millis();
+  return true;
+}
+
+int BleElm327::pollAsync(String& out, uint32_t timeoutMs) {
+  if (!asyncPending) return -1;  // annullata (es. dal ponte seriale)
+  if (dataReady) {
+    asyncPending = false;
+    out = lastResponse;
+    return 1;
+  }
+  if (millis() - asyncStartMs >= timeoutMs) {
+    asyncPending = false;
+    return -1;
+  }
+  return 0;
+}
+
+ElmResponse BleElm327::parseResponse(const String& raw, const char* hdrHex) {
+  ElmResponse r;
+  r.raw = raw;
+  r.len = 0;
+  r.ok  = extractBytes(raw, String(hdrHex), r.bytes, r.len);
+  return r;
+}
+
+int BleElm327::getEcuCount() { return ecuCount; }
+
+// Conta quante ECU hanno risposto a 0100 (occorrenze di "4100").
+// Serve per il suffisso "risposte attese": es. con 2 ECU "010C2" fa
+// tornare l'ELM appena arrivate entrambe, senza attendere il timeout bus.
+static int countEcus(const String& raw) {
+  String s = raw;
+  s.toUpperCase();
+  s.replace(" ", ""); s.replace("\r", ""); s.replace("\n", "");
+  int n = 0, idx = 0;
+  while ((idx = s.indexOf("4100", idx)) >= 0) { n++; idx += 4; }
+  return n > 6 ? 6 : n;
+}
+
+// ── Physical addressing alla ECM ─────────────────────────────
+// Con l'header funzionale broadcast alcune auto (Honda 10th-gen in 29-bit)
+// rispondono con un set ridotto di PID e ignorano il Mode 22 (UDS richiede
+// indirizzamento fisico). Qui puntiamo direttamente la ECM:
+//   29-bit: richiesta 18DA10F1, risposta 18DAF110
+//   11-bit: richiesta 7E0,      risposta 7E8
+static bool tryPhysicalHeader(uint8_t proto) {
+  if (proto == 7 || proto == 9) {
+    BleElm327::sendCommand("ATCP18");
+    BleElm327::sendCommand("ATSHDA10F1");
+    BleElm327::sendCommand("ATCRA18DAF110");  // filtro RX sulla risposta ECM
+  } else if (proto == 6 || proto == 8) {
+    BleElm327::sendCommand("ATSH7E0");
+    BleElm327::sendCommand("ATCRA7E8");
+  } else {
+    return false;  // non-CAN: physical addressing non gestito
+  }
+  uint8_t buf[ELM_RESP_MAX]; uint8_t blen = 0;
+  auto r = BleElm327::sendCommand("01001", 5000);  // suffisso 1: una sola ECU
+  return r.ok && extractBytes(r.raw, "4100", buf, blen);
+}
+
+static void restoreFunctionalHeader(uint8_t proto) {
+  BleElm327::sendCommand("ATAR");  // annulla il filtro CRA
+  if (proto == 7 || proto == 9) {
+    BleElm327::sendCommand("ATCP18");
+    BleElm327::sendCommand("ATSHDB33F1");
+  } else if (proto == 6 || proto == 8) {
+    BleElm327::sendCommand("ATSH7DF");
+  }
+}
+
 bool BleElm327::init() {
   Serial.println("[ELM] Init...");
+  physicalAddressing = false;
   delay(100);
   sendCommand("ATZ",   3000);  // reset — risposta lenta
   delay(500);
@@ -250,7 +340,7 @@ bool BleElm327::init() {
   sendCommand("ATL0");   // linefeeds off
   sendCommand("ATS0");   // spaces off (risposta più compatta)
   sendCommand("ATH0");   // headers off
-  sendCommand("ATAT1");  // adaptive timing → meno "NO DATA" da ECU lente
+  sendCommand("ATAT2");  // adaptive timing aggressivo → meno attesa dopo le risposte
 
   // Protocollo del profilo (es. Honda "7" = CAN 29bit 500k), default auto
   String sp = "ATSP" + forcedProtocol;
@@ -268,7 +358,7 @@ bool BleElm327::init() {
 
   // Probe: la centralina risponde? (0100 = PID supportati). Timeout lungo:
   // la prima query su bus freddo / ricerca protocollo può superare i 5s.
-  uint8_t buf[8]; uint8_t blen = 0;
+  uint8_t buf[ELM_RESP_MAX]; uint8_t blen = 0;
   auto probe = sendCommand("0100", 10000);
   ecuResponding = probe.ok && extractBytes(probe.raw, "4100", buf, blen);
 
@@ -280,8 +370,46 @@ bool BleElm327::init() {
     ecuResponding = probe.ok && extractBytes(probe.raw, "4100", buf, blen);
   }
 
-  Serial.printf("[ELM] Init OK (ATSP%s). ECU %s\n",
-                forcedProtocol.c_str(), ecuResponding ? "risponde" : "MUTA");
+  ecuCount = ecuResponding ? countEcus(probe.raw) : 0;
+
+  // Protocollo effettivo (ATDPN: es. "7", o "A7" se rilevato in auto)
+  auto dp = sendCommand("ATDPN");
+  String dps = dp.raw; dps.trim(); dps.toUpperCase(); dps.replace("A", "");
+  detectedProtocol = (uint8_t)strtol(dps.c_str(), nullptr, 16);
+  Serial.printf("[ELM] Protocollo attivo: %d\n", detectedProtocol);
+
+  // Physical addressing alla ECM: maschera PID completa, Mode 22 possibile,
+  // risposte singole (suffisso "1" → query ancora più rapide).
+  if (ecuResponding && tryPhysicalHeader(detectedProtocol)) {
+    physicalAddressing = true;
+    ecuCount = 1;
+    Serial.println("[ELM] Physical addressing: OK (ECM diretta)");
+  } else if (ecuResponding) {
+    restoreFunctionalHeader(detectedProtocol);
+    Serial.println("[ELM] Physical addressing muto -> fallback funzionale");
+  }
+
+  // Registra i comandi per ripristinare QUESTO header (il "default") dopo
+  // le query su altre ECU (profili schema 2 con hdr per-PID).
+  dfltCmdCount = 0;
+  currentHdr = "";
+  if (detectedProtocol == 7 || detectedProtocol == 9) {
+    if (physicalAddressing) {
+      dfltCmds[0] = "ATSHDA10F1"; dfltCmds[1] = "ATCRA18DAF110"; dfltCmdCount = 2;
+    } else {
+      dfltCmds[0] = "ATAR"; dfltCmds[1] = "ATCP18"; dfltCmds[2] = "ATSHDB33F1"; dfltCmdCount = 3;
+    }
+  } else if (detectedProtocol == 6 || detectedProtocol == 8) {
+    if (physicalAddressing) {
+      dfltCmds[0] = "ATSH7E0"; dfltCmds[1] = "ATCRA7E8"; dfltCmdCount = 2;
+    } else {
+      dfltCmds[0] = "ATAR"; dfltCmds[1] = "ATSH7DF"; dfltCmdCount = 2;
+    }
+  }
+
+  Serial.printf("[ELM] Init OK (ATSP%s). ECU %s (n=%d%s)\n",
+                forcedProtocol.c_str(), ecuResponding ? "risponde" : "MUTA",
+                ecuCount, physicalAddressing ? ", fisico" : "");
   return true;
 }
 
@@ -321,8 +449,8 @@ static bool extractBytes(const String& raw, const String& respHeaderHex,
   if (idx < 0) return false;
   int dataStart = idx + respHeaderHex.length();
 
-  // Estrai coppie hex valide come byte
-  for (int i = dataStart; i + 1 < (int)s.length() && outLen < 8; i += 2) {
+  // Estrai coppie hex valide come byte (multi-frame: fino a ELM_RESP_MAX)
+  for (int i = dataStart; i + 1 < (int)s.length() && outLen < ELM_RESP_MAX; i += 2) {
     char c0 = s[i], c1 = s[i + 1];
     if (!isHexadecimalDigit(c0) || !isHexadecimalDigit(c1)) break;
     char bs[3] = { c0, c1, 0 };
@@ -341,6 +469,8 @@ ElmResponse BleElm327::queryPID(uint8_t mode, uint8_t pid) {
   char hdr[8];
   snprintf(hdr, sizeof(hdr), "%02X%02X", mode + 0x40, pid);
   resp.ok = extractBytes(resp.raw, hdr, resp.bytes, resp.len);
+  Serial.printf("[OBD] %s -> %s (ok=%d len=%d)\n",
+                cmd, resp.raw.c_str(), resp.ok, resp.len);
   return resp;
 }
 
@@ -354,6 +484,8 @@ ElmResponse BleElm327::queryPID22(uint16_t pid) {
   char hdr[8];
   snprintf(hdr, sizeof(hdr), "62%04X", pid);
   resp.ok = extractBytes(resp.raw, hdr, resp.bytes, resp.len);
+  Serial.printf("[OBD] %s -> %s (ok=%d len=%d)\n",
+                cmd, resp.raw.c_str(), resp.ok, resp.len);
   return resp;
 }
 
@@ -368,6 +500,34 @@ uint32_t BleElm327::getSupportedPIDs(uint8_t group) {
 }
 
 uint8_t BleElm327::getDetectedProtocol() { return detectedProtocol; }
+
+bool BleElm327::physicalOk() { return physicalAddressing; }
+
+// ── Header per-PID (profili schema 2) ────────────────────────
+// 29-bit (proto 7/9): hdr OBDb "DA1D" → ATSH DA1DF1, risposta 18DAF1<rax>
+// 11-bit (proto 6/8): hdr OBDb "7E0"  → ATSH 7E0,    risposta = rax ("7E8")
+int BleElm327::getHeaderCmds(const char* hdr, const char* rax, String out[3]) {
+  if (!hdr || !hdr[0]) return getDefaultHeaderCmds(out);
+  if (detectedProtocol == 7 || detectedProtocol == 9) {
+    out[0] = String("ATSH") + hdr + "F1";
+    out[1] = String("ATCRA18DAF1") + (rax && rax[0] ? rax : "");
+    return (rax && rax[0]) ? 2 : 1;
+  }
+  if (detectedProtocol == 6 || detectedProtocol == 8) {
+    out[0] = String("ATSH") + hdr;
+    out[1] = String("ATCRA") + (rax && rax[0] ? rax : "");
+    return (rax && rax[0]) ? 2 : 1;
+  }
+  return 0;  // non-CAN: header non gestiti
+}
+
+int BleElm327::getDefaultHeaderCmds(String out[3]) {
+  for (int i = 0; i < dfltCmdCount; i++) out[i] = dfltCmds[i];
+  return dfltCmdCount;
+}
+
+const char* BleElm327::activeHdr() { return currentHdr.c_str(); }
+void BleElm327::setActiveHdr(const char* hdr) { currentHdr = hdr ? hdr : ""; }
 
 String BleElm327::lastCmd() { return lastCmdSent; }
 String BleElm327::lastRaw() { return lastResponse; }

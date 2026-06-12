@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Ram 1500","source":"OBDb/Ram-1500","protocol":"6","pids":[{"cmd":"2204FE","hdr":"7E1","name":"TRANS","unit":"°C","target":"trans_temp","bix":0,"len":8,"mul":1.8,"add":-40,"min":-30,"max":300,"every":4,"src":"1500_ATF_T","rax":"7E9"}]}

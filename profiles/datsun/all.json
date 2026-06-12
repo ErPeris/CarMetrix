@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Datsun All","source":"OBDb/Datsun","protocol":"6","pids":[{"cmd":"221266","hdr":"7E0","name":"OIL","unit":"°C","target":"oil_temp","bix":0,"len":16,"mul":0.0234375,"add":-273,"min":-500,"max":500,"every":1,"src":"DATSUN_VVTO_T","rax":"7E8"}]}

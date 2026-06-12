@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Audi TT","source":"OBDb/Audi-TT","protocol":"6","pids":[{"cmd":"22202F","hdr":"714","name":"OIL","unit":"°C","target":"oil_temp","bix":0,"len":8,"mul":1,"add":-58,"min":-40,"max":197,"every":4,"src":"TT_EOT","rax":"77E"}]}

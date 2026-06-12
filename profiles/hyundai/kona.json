@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Hyundai Kona","source":"OBDb/Hyundai-Kona","protocol":"6","pids":[{"cmd":"22E001","hdr":"7E0","name":"OIL","unit":"°C","target":"oil_temp","bix":272,"len":8,"mul":0.75001875,"add":-48,"min":-40,"max":143.254781,"every":4,"src":"KONA_OIL_TEMP","rax":"7E8"}]}

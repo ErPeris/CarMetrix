@@ -1,0 +1,1 @@
+{"schema":2,"brand":"MG All","source":"OBDb/MG","protocol":"6","pids":[{"cmd":"22B001","hdr":"7DF","name":"HV TEMP","unit":"°C","target":"hv_temp","bix":32,"len":8,"mul":0.5,"add":-40,"min":-40,"max":150,"every":1,"src":"MG_HVBAT_CMU01_MINTEMP","rax":"7EC"}]}

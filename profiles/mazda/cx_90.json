@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Mazda CX 90","source":"OBDb/Mazda-CX-90","protocol":"6","pids":[{"cmd":"221310","hdr":"7E0","name":"OIL","unit":"°C","target":"oil_temp","bix":0,"len":16,"mul":0.01,"add":-40,"min":-40,"max":615.35,"every":4,"src":"CX90_EOT"}]}

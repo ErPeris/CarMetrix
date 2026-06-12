@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#060709">
+<title>CarMetrix</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#060709;--panel:#0c0e11;--panel2:#12151a;--line:#22272f;
+  --yel:#fcee0a;--cyan:#3ee6f7;--red:#ff124f;--green:#2bd96c;--amber:#ffb01f;
+  --text:#cfd6df;--dim:#5a6573;
+  --mono:Consolas,'Roboto Mono','Courier New',monospace;
+  --cond:Bahnschrift,'Roboto Condensed','Arial Narrow','Segoe UI',sans-serif;
+  --clip:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%);
+  --clipBtn:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+}
+html{font-size:16px}
+body{
+  background:var(--bg);color:var(--text);font-family:var(--cond);
+  min-height:100vh;letter-spacing:.02em;
+  padding-bottom:calc(76px + env(safe-area-inset-bottom));
+}
+/* scanline + griglia d'atmosfera */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    repeating-linear-gradient(0deg,transparent 0 2px,#ffffff05 2px 4px),
+    radial-gradient(ellipse 120% 60% at 50% -10%,#3ee6f70a,transparent 60%);
+}
+body>*{position:relative;z-index:1}
+
+/* ── Top bar ── */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.8rem 1rem .7rem;background:linear-gradient(180deg,#0c0e11,#0c0e1100);
+  border-bottom:1px solid var(--line);
+}
+.brand{
+  font-family:var(--mono);font-size:1.05rem;font-weight:700;color:#fff;
+  letter-spacing:.14em;text-shadow:1px 0 0 #ff124f66,-1px 0 0 #3ee6f766;
+}
+.brand b{color:var(--yel);font-weight:700}
+.brand .v{font-size:.6rem;color:var(--dim);letter-spacing:.06em;margin-left:.45rem;text-shadow:none}
+.badge{
+  font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;
+  padding:.3rem .6rem;border:1px solid var(--line);color:var(--dim);
+  clip-path:var(--clipBtn);background:var(--panel2);
+  display:inline-flex;align-items:center;gap:.4rem;
+}
+.badge .dot{width:6px;height:6px;background:currentColor}
+.badge.ok{color:var(--green);border-color:#2bd96c55}
+.badge.demo{color:var(--amber);border-color:#ffb01f55}
+
+/* ── Pannelli ── */
+.panel{display:none;padding:1rem .9rem 1.4rem;max-width:560px;margin:0 auto}
+.panel.active{display:block;animation:slidein .22s ease-out}
+@keyframes slidein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ── Card ── */
+.card{
+  background:var(--panel);border:1px solid var(--line);
+  clip-path:var(--clip);padding:1rem .95rem 1rem;margin-bottom:1rem;
+  position:relative;
+}
+.card::before{ /* tacca gialla angolo */
+  content:'';position:absolute;top:0;right:0;width:14px;height:14px;
+  background:linear-gradient(45deg,transparent 50%,var(--yel) 50%);
+  opacity:.9;
+}
+.card-title{
+  font-family:var(--mono);font-size:.64rem;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--dim);margin-bottom:.9rem;
+}
+.card-title::before{content:'// ';color:var(--yel)}
+.hint{font-size:.74rem;color:var(--dim);line-height:1.5;margin-top:.6rem}
+
+/* ── Form ── */
+label{display:block;font-family:var(--mono);font-size:.62rem;color:var(--dim);
+  margin-bottom:.35rem;letter-spacing:.16em;text-transform:uppercase}
+select,input[type=text],input[type=password],input[type=file],input[type=number]{
+  width:100%;padding:.7rem .75rem;font-size:1rem;font-family:var(--cond);
+  background:var(--panel2);border:1px solid var(--line);color:var(--text);
+  outline:none;border-radius:0;transition:border-color .15s;
+}
+select:focus,input:focus{border-color:var(--yel)}
+.form-group{margin-bottom:1rem}
+
+/* ── Bottoni ── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:.5rem;
+  min-height:48px;padding:.7rem 1.1rem;width:100%;cursor:pointer;
+  font-family:var(--mono);font-size:.78rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;
+  border:1px solid var(--line);background:var(--panel2);color:var(--text);
+  clip-path:var(--clipBtn);transition:filter .12s,background .15s;
+}
+.btn:active{filter:brightness(1.35)}
+.btn-primary{background:var(--yel);border-color:var(--yel);color:#0a0a06}
+.btn-cyan{border-color:#3ee6f766;color:var(--cyan)}
+.btn-danger{border-color:#ff124f66;color:var(--red)}
+.btn-success{background:var(--green);border-color:var(--green);color:#04130a}
+.btn-sm{min-height:40px;width:auto;padding:.45rem .8rem;font-size:.68rem}
+.btn[disabled]{opacity:.4;pointer-events:none}
+
+/* ── Liste dispositivi/reti ── */
+.dev-list{display:flex;flex-direction:column;gap:.5rem;margin-top:.7rem}
+.dev-item{
+  display:flex;align-items:center;justify-content:space-between;gap:.6rem;
+  padding:.75rem .8rem;background:var(--panel2);border:1px solid var(--line);
+  border-left:3px solid var(--line);cursor:pointer;min-height:52px;
+}
+.dev-item.selected{border-left-color:var(--yel);border-color:#fcee0a55}
+.dev-name{font-size:.95rem;font-weight:600}
+.dev-mac{font-family:var(--mono);font-size:.64rem;color:var(--dim)}
+.dev-rssi{font-family:var(--mono);font-size:.7rem;color:var(--cyan);white-space:nowrap}
+
+/* ── Toggle ── */
+.toggle{
+  width:46px;height:24px;background:var(--line);position:relative;cursor:pointer;
+  clip-path:var(--clipBtn);transition:background .15s;flex:none;
+}
+.toggle::after{
+  content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;
+  background:#79858f;transition:left .15s,background .15s;
+}
+.toggle.on{background:#fcee0a33}
+.toggle.on::after{left:25px;background:var(--yel)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:.8rem}
+.row .lbl{font-size:.92rem}
+
+/* ── Tab DISPLAY: schermate OLED ── */
+.scr-item{
+  display:flex;align-items:center;gap:.55rem;
+  padding:.5rem .6rem;background:var(--panel2);border:1px solid var(--line);
+  border-left:3px solid var(--cyan);margin-bottom:.5rem;
+}
+.scr-pos{font-family:var(--mono);font-size:.62rem;color:var(--yel);width:1.2rem}
+.scr-name{flex:1;font-weight:700;letter-spacing:.06em}
+.scr-name small{font-family:var(--mono);font-weight:400;color:var(--dim);margin-left:.4rem}
+.icon-btn{
+  width:42px;height:42px;flex:none;display:flex;align-items:center;justify-content:center;
+  background:var(--panel);border:1px solid var(--line);color:var(--cyan);
+  font-size:1rem;cursor:pointer;clip-path:var(--clipBtn);
+}
+.icon-btn:active{filter:brightness(1.5)}
+.icon-btn.del{color:var(--red)}
+.icon-btn[disabled]{opacity:.25;pointer-events:none}
+.scr-addgrid{display:flex;flex-wrap:wrap;gap:.5rem}
+.scr-chip{
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;
+  padding:.6rem .8rem;border:1px dashed #3ee6f755;color:var(--cyan);
+  cursor:pointer;clip-path:var(--clipBtn);background:#3ee6f70d;min-height:42px;
+  display:inline-flex;align-items:center;
+}
+.scr-chip::before{content:'+ ';color:var(--yel)}
+.scr-chip.ro{pointer-events:none;border-style:solid;color:var(--yel);border-color:#fcee0a44;background:#fcee0a0d}
+.scr-chip.ro::before{content:'\25B8  ';color:var(--cyan)}
+
+/* ── Alert grid ── */
+.alert-head,.alert-row{
+  display:grid;grid-template-columns:1fr 72px 72px 46px;
+  gap:.45rem;align-items:center;
+}
+.alert-head{font-family:var(--mono);font-size:.58rem;letter-spacing:.12em;
+  color:var(--dim);margin-bottom:.4rem}
+.alert-head .w{color:var(--amber);text-align:center}
+.alert-head .d{color:var(--red);text-align:center}
+.alert-row{padding:.45rem 0;border-bottom:1px solid var(--line)}
+.alert-row:last-child{border-bottom:none}
+.alert-pid{font-weight:700;font-size:.88rem;letter-spacing:.05em}
+.alert-row input[type=number]{padding:.5rem .4rem;font-size:.95rem;text-align:center}
+
+/* ── Live ── */
+.live-item{margin-bottom:1.05rem}
+.live-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.3rem}
+.live-name{font-family:var(--mono);font-size:.62rem;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+.live-val{font-family:var(--mono);font-size:1.35rem;color:#fff}
+.live-val .u{font-size:.66rem;color:var(--dim);margin-left:.3rem}
+.live-track{height:7px;background:var(--line);position:relative;overflow:hidden;
+  clip-path:polygon(0 0,100% 0,calc(100% - 7px) 100%,0 100%)}
+.live-fill{position:absolute;left:0;top:0;height:100%;background:var(--cyan);width:0;transition:width .25s ease-out}
+.live-fill.warn{background:var(--amber)}
+.live-fill.danger{background:var(--red);box-shadow:0 0 10px var(--red)}
+.live-item.novalid{opacity:.3}
+.live-offline{font-size:.82rem;color:var(--amber);padding:.5rem 0}
+
+/* ── Range ── */
+input[type=range]{width:100%;accent-color:var(--yel);height:32px}
+
+/* ── Progress OTA ── */
+.progress-wrap{height:8px;background:var(--line);margin-top:.8rem;
+  clip-path:polygon(0 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+.progress-bar{height:100%;background:var(--yel);width:0%;transition:width .3s}
+
+/* ── Bottom nav ── */
+.nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:50;
+  display:flex;background:#0a0c0fee;backdrop-filter:blur(8px);
+  border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.nav::before{
+  content:'';position:absolute;top:-1px;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,#3ee6f755,transparent);
+}
+.nav-it{
+  flex:1;min-height:60px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;cursor:pointer;color:var(--dim);
+  font-family:var(--mono);font-size:.56rem;letter-spacing:.14em;text-transform:uppercase;
+  border-top:2px solid transparent;transition:color .15s;
+}
+.nav-it svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:square}
+.nav-it.active{color:var(--yel);border-top-color:var(--yel)}
+
+/* ── Toast ── */
+#toast{
+  position:fixed;bottom:calc(86px + env(safe-area-inset-bottom));left:50%;
+  transform:translateX(-50%);max-width:90vw;
+  background:#0a0c0f;border:1px solid var(--green);color:var(--green);
+  font-family:var(--mono);font-size:.74rem;letter-spacing:.08em;
+  padding:.6rem 1.1rem;clip-path:var(--clipBtn);
+  opacity:0;transition:opacity .25s;pointer-events:none;z-index:99;white-space:nowrap;
+}
+#toast.show{opacity:1}
+.spin{display:inline-block;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(min-width:560px){.panel{padding-top:1.4rem}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">CAR<b>//</b>METRIX<span class="v" id="topver"></span></div>
+  <div id="cfg-badge" class="badge"><div class="dot"></div><span>LINK...</span></div>
+</div>
+
+<!-- ═══════════ SETUP ═══════════ -->
+<div id="panel-setup" class="panel active">
+  <div class="card">
+    <div class="card-title">Adattatore OBD2 — BLE</div>
+    <button class="btn btn-primary" onclick="scanBLE()" id="btn-scan">
+      <span id="scan-icon">⌖</span> Cerca adattatori
+    </button>
+    <div id="dev-list" class="dev-list"></div>
+    <input type="hidden" id="sel-mac" value="">
+  </div>
+
+  <div class="card">
+    <div class="card-title">Veicolo</div>
+    <div class="form-group">
+      <label>Marca</label>
+      <select id="sel-brand" onchange="onBrandChange()">
+        <option value="">Caricamento...</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Modello</label>
+      <select id="sel-model" onchange="onModelChange()"></select>
+    </div>
+    <div class="scr-addgrid" id="profile-extras"></div>
+    <div class="hint" id="profile-hint"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Demo Mode</div>
+    <div class="row">
+      <div class="lbl">Dati simulati (test senza OBD)</div>
+      <div class="toggle" id="demo-toggle" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="hint">Con Demo ON il device genera dati finti che spaziano tutte le zone (nominale → warn → danger) per testare display, gauge e buzzer. Salva e riavvia per attivarlo.</div>
+  </div>
+
+  <button class="btn btn-success" onclick="saveConfig()">▸ Salva e riavvia</button>
+  <div style="margin-top:.7rem">
+    <button class="btn btn-danger" onclick="if(confirm('Reset completo della configurazione?'))resetConfig()">✕ Reset configurazione</button>
+  </div>
+</div>
+
+<!-- ═══════════ DISPLAY ═══════════ -->
+<div id="panel-display" class="panel">
+  <div class="card">
+    <div class="card-title">Schermate OLED — ordine di rotazione</div>
+    <div id="scr-active"></div>
+    <div class="hint">Il click sul pulsante del device cicla le schermate in quest'ordine. ▲▼ riordina, ✕ rimuove.</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Aggiungi schermata</div>
+    <div class="scr-addgrid" id="scr-add"></div>
+    <div class="hint" id="scr-add-empty" style="display:none">Tutte le schermate disponibili sono già attive.</div>
+  </div>
+  <button class="btn btn-primary" onclick="saveScreens()">▸ Applica al display</button>
+  <div class="hint" style="text-align:center">Applicazione immediata, senza riavvio.</div>
+</div>
+
+<!-- ═══════════ LIVE ═══════════ -->
+<div id="panel-dashboard" class="panel">
+  <div class="card">
+    <div class="card-title">Telemetria <span id="live-age" style="float:right;color:var(--dim)"></span></div>
+    <div id="live-grid">
+      <div class="live-offline">In attesa di dati... (attiva Demo Mode o collega l'OBD)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ ALERT ═══════════ -->
+<div id="panel-alerts" class="panel">
+  <div class="card">
+    <div class="card-title">Soglie alert</div>
+    <div class="alert-head">
+      <div>PARAMETRO</div><div class="w">WARN</div><div class="d">DANGER</div><div style="text-align:center">BUZZ</div>
+    </div>
+    <div id="alert-rows"></div>
+    <div class="hint" id="alert-empty" style="display:none">Nessuna schermata attiva ha soglie configurabili. Aggiungi un gauge con soglie (IAT, BOOST, TRANS, COOLANT, OIL, HV TEMP) dalla tab Display.</div>
+    <div class="hint">Vengono mostrati solo i parametri delle schermate attive nella tab Display.</div>
+  </div>
+  <button class="btn btn-primary" onclick="saveAlerts()">▸ Salva soglie</button>
+
+  <div class="card" style="margin-top:1rem">
+    <div class="card-title">Buzzer</div>
+    <div class="row" style="margin-bottom:1.1rem">
+      <div class="lbl">Suono allarmi attivo</div>
+      <div class="toggle on" id="bz-enabled" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="form-group">
+      <label>Freq. WARN — <span id="bz-warn-val">1700</span> Hz</label>
+      <div style="display:flex;gap:.6rem;align-items:center">
+        <input type="range" id="bz-warn" min="500" max="5000" step="50" value="1700"
+               oninput="document.getElementById('bz-warn-val').textContent=this.value" style="flex:1">
+        <button class="btn btn-sm btn-cyan" onclick="testBuzzer(document.getElementById('bz-warn').value)">▶</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Freq. DANGER — <span id="bz-danger-val">2100</span> Hz</label>
+      <div style="display:flex;gap:.6rem;align-items:center">
+        <input type="range" id="bz-danger" min="500" max="5000" step="50" value="2100"
+               oninput="document.getElementById('bz-danger-val').textContent=this.value" style="flex:1">
+        <button class="btn btn-sm btn-cyan" onclick="testBuzzer(document.getElementById('bz-danger').value)">▶</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Stile allarme DANGER</label>
+      <div style="display:flex;gap:.6rem;align-items:center">
+        <select id="bz-style" style="flex:1">
+          <option value="continuo">Continuo (tono fisso, max volume)</option>
+          <option value="impulsi">Impulsi (beep ritmati)</option>
+          <option value="bitonale">Bitonale (due toni alternati)</option>
+          <option value="allarme">Allarme (alternanza rapida)</option>
+        </select>
+        <button class="btn btn-sm btn-cyan" onclick="testStyle()">▶</button>
+      </div>
+    </div>
+    <div class="hint" style="margin-bottom:.9rem">Un buzzer passivo è più forte alla frequenza di risonanza (~2100 Hz su questo modulo). Usa ▶ per provare toni e stili.</div>
+    <button class="btn btn-primary" onclick="saveBuzzer()">▸ Salva buzzer</button>
+  </div>
+</div>
+
+<!-- ═══════════ UPDATE ═══════════ -->
+<div id="panel-ota" class="panel">
+  <div class="card">
+    <div class="card-title">WiFi di casa — per OTA</div>
+    <div class="form-group">
+      <label>Rete</label>
+      <div style="display:flex;gap:.5rem">
+        <input type="text" id="home-ssid" placeholder="seleziona o scrivi" style="flex:1">
+        <button class="btn btn-sm btn-cyan" id="btn-wifiscan" onclick="scanWifi()">⟳ SCAN</button>
+      </div>
+      <div id="wifi-list" class="dev-list"></div>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="home-pass" placeholder="(inserisci per impostarla)">
+    </div>
+    <div class="hint">Serve all'ESP per scaricare gli aggiornamenti da GitHub da solo. Usato solo a casa/garage, non in auto.</div>
+    <button class="btn btn-cyan" onclick="saveWifi()">▸ Salva WiFi</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Aggiorna da GitHub</div>
+    <div style="font-family:var(--mono);font-size:.78rem;color:var(--dim);margin-bottom:.9rem;line-height:1.7">
+      Installata: <span id="cur-ver2" style="color:#fff">—</span><br>
+      Ultima release: <span id="latest-ver" style="color:var(--cyan)">—</span>
+    </div>
+    <button class="btn btn-primary" id="btn-check" onclick="startGithubOTA()">⟳ Controlla e aggiorna</button>
+    <div id="gh-msg" style="font-size:.78rem;margin-top:.7rem;color:var(--dim)"></div>
+    <div class="hint">L'ESP si collega al WiFi di casa e scarica l'update da solo. Il telefono può disconnettersi dall'hotspot: è normale, ricollegati a fine riavvio.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Aggiorna da file .bin</div>
+    <div class="form-group">
+      <label>File firmware</label>
+      <input type="file" id="fw-file" accept=".bin" onchange="onFileSelect()">
+    </div>
+    <div id="fw-name" style="font-family:var(--mono);font-size:.68rem;color:var(--dim);margin-bottom:.8rem"></div>
+    <button class="btn btn-cyan" id="btn-upload" onclick="uploadFirmware()" disabled>↑ Carica firmware</button>
+  </div>
+
+  <div class="card" id="ota-progress-card" style="display:none">
+    <div class="card-title">Avanzamento</div>
+    <div class="progress-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+    <div id="ota-msg" style="font-size:.78rem;margin-top:.6rem;color:var(--dim)"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Sistema</div>
+    <button class="btn" onclick="if(confirm('Riavviare il dispositivo?'))reboot()">↺ Riavvia</button>
+  </div>
+</div>
+
+<!-- ═══════════ BOTTOM NAV ═══════════ -->
+<div class="nav">
+  <div class="nav-it active" data-panel="setup" onclick="tab('setup')">
+    <svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z"/><path d="M19 12c0-.6.5-1.4 1-1.8l-1.2-3-2 .3c-.5-.4-1-.7-1.6-.9L14.5 4h-3l-.7 2.6c-.6.2-1.1.5-1.6.9l-2-.3-1.2 3c.5.4 1 1.2 1 1.8s-.5 1.4-1 1.8l1.2 3 2-.3c.5.4 1 .7 1.6.9l.7 2.6h3l.7-2.6c.6-.2 1.1-.5 1.6-.9l2 .3 1.2-3c-.5-.4-1-1.2-1-1.8z"/></svg>
+    Setup
+  </div>
+  <div class="nav-it" data-panel="display" onclick="tab('display')">
+    <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12"/><path d="M9 21h6M12 17v4"/></svg>
+    Display
+  </div>
+  <div class="nav-it" data-panel="dashboard" onclick="tab('dashboard')">
+    <svg viewBox="0 0 24 24"><path d="M3 13h4l2-7 4 14 2-7h6"/></svg>
+    Live
+  </div>
+  <div class="nav-it" data-panel="alerts" onclick="tab('alerts')">
+    <svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.5"/></svg>
+    Alert
+  </div>
+  <div class="nav-it" data-panel="ota" onclick="tab('ota')">
+    <svg viewBox="0 0 24 24"><path d="M12 20V7M6 12l6-6 6 6"/><path d="M4 21h16"/></svg>
+    Update
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Tab navigation ─────────────────────────────────────────
+function tab(name) {
+  document.querySelectorAll('.nav-it').forEach(t=>{
+    t.classList.toggle('active', t.dataset.panel===name);
+  });
+  document.querySelectorAll('.panel').forEach(p=>{
+    p.classList.toggle('active', p.id==='panel-'+name);
+  });
+  if (name === 'dashboard') startLivePolling();
+  else                      stopLivePolling();
+  window.scrollTo(0,0);
+}
+
+// ── Toast ──────────────────────────────────────────────────
+function toast(msg, color='var(--green)') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = color;
+  t.style.color = color;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2500);
+}
+
+// ── Load config ────────────────────────────────────────────
+let ghOwner = '', ghRepo = '', curVer = '0.0.0';
+
+async function loadConfig() {
+  try {
+    const r = await fetch('/api/config');
+    const d = await r.json();
+    curVer  = d.version || '0.0.0';
+    ghOwner = d.ghOwner || '';
+    ghRepo  = d.ghRepo  || '';
+    document.getElementById('cur-ver2').textContent = 'v' + curVer;
+    document.getElementById('topver').textContent = 'v' + curVer;
+    if (d.bleMac) {
+      document.getElementById('sel-mac').value = d.bleMac;
+      addDeviceToList(d.bleMac, d.bleMac, 0, true);
+    }
+    if (d.demoMode) document.getElementById('demo-toggle').classList.add('on');
+    if (d.homeSsid) document.getElementById('home-ssid').value = d.homeSsid;
+    if (d.hasWifiPass) document.getElementById('home-pass').placeholder = '•••••• (già salvata)';
+
+    const badge = document.getElementById('cfg-badge');
+    if (d.demoMode) {
+      badge.className = 'badge demo';
+      badge.innerHTML = '<div class="dot"></div><span>DEMO</span>';
+    } else if (d.configured) {
+      badge.className = 'badge ok';
+      badge.innerHTML = '<div class="dot"></div><span>ONLINE</span>';
+    } else {
+      badge.innerHTML = '<div class="dot"></div><span>SETUP</span>';
+    }
+    await loadProfiles(d.carProfile);
+  } catch(e) { console.error(e); }
+}
+
+// ── Selezione veicolo guidata (Marca → Modello, da index.json) ──
+let profIndex = [];
+
+async function loadProfiles(currentProfile) {
+  try {
+    const r = await fetch('/api/profiles');
+    profIndex = await r.json();
+  } catch(e) {
+    profIndex = [{file:'generic.json', brand:'Generic', model:'Standard OBD2', extras:[]}];
+  }
+  // Normalizza anche il formato legacy {file, brand}
+  profIndex = profIndex.map(p => ({
+    file: p.file, brand: p.brand || p.file,
+    model: p.model || 'Standard', extras: p.extras || []
+  }));
+  const brands = [...new Set(profIndex.map(p => p.brand))]
+    .sort((a,b) => (a==='Generic' ? -1 : b==='Generic' ? 1 : a.localeCompare(b)));
+  const sb = document.getElementById('sel-brand');
+  sb.innerHTML = '';
+  brands.forEach(b => {
+    const o = document.createElement('option');
+    o.value = b; o.textContent = b;
+    sb.appendChild(o);
+  });
+  const cur = profIndex.find(p => p.file === currentProfile);
+  if (cur) sb.value = cur.brand;
+  onBrandChange(cur ? cur.file : null);
+}
+
+function onBrandChange(preFile) {
+  const b = document.getElementById('sel-brand').value;
+  const sm = document.getElementById('sel-model');
+  sm.innerHTML = '';
+  profIndex.filter(p => p.brand === b).forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.file; o.textContent = p.model;
+    sm.appendChild(o);
+  });
+  if (preFile) sm.value = preFile;
+  onModelChange();
+}
+
+function onModelChange() {
+  const p = profIndex.find(x => x.file === document.getElementById('sel-model').value);
+  const ex = document.getElementById('profile-extras');
+  const hint = document.getElementById('profile-hint');
+  ex.innerHTML = '';
+  if (!p) { hint.textContent = ''; return; }
+  (p.extras || []).forEach(x => {
+    const c = document.createElement('div');
+    c.className = 'scr-chip ro';
+    c.textContent = x;
+    ex.appendChild(c);
+  });
+  hint.textContent = (p.extras && p.extras.length)
+    ? 'Sensori extra del profilo — le schermate si attivano dalla tab Display.'
+    : 'Parametri standard OBD2 (Mode 01).';
+}
+
+// ── BLE Scan ──────────────────────────────────────────────
+async function scanBLE() {
+  const btn  = document.getElementById('btn-scan');
+  const icon = document.getElementById('scan-icon');
+  const list = document.getElementById('dev-list');
+
+  btn.disabled = true;
+  icon.className = 'spin';
+  list.innerHTML = '<div class="hint">Scansione in corso (8s)...</div>';
+
+  try {
+    const r = await fetch('/api/ble/scan');
+    const devs = await r.json();
+    list.innerHTML = '';
+    if (devs.length === 0) {
+      list.innerHTML = '<div class="hint">Nessun adattatore trovato</div>';
+    } else {
+      devs.forEach(d => addDeviceToList(d.name, d.mac, d.rssi));
+    }
+  } catch(e) {
+    list.innerHTML = '<div class="hint" style="color:var(--red)">Errore scan</div>';
+  }
+  btn.disabled = false;
+  icon.className = '';
+}
+
+function addDeviceToList(name, mac, rssi, selected=false) {
+  const list = document.getElementById('dev-list');
+  if (document.querySelector(`[data-mac="${mac}"]`)) return;
+  const item = document.createElement('div');
+  item.className = 'dev-item' + (selected ? ' selected' : '');
+  item.dataset.mac = mac;
+  item.innerHTML = `
+    <div>
+      <div class="dev-name">${name}</div>
+      <div class="dev-mac">${mac}</div>
+    </div>
+    <div class="dev-rssi">${rssi ? rssi+' dBm' : ''}</div>`;
+  item.onclick = () => {
+    document.querySelectorAll('.dev-item').forEach(i=>i.classList.remove('selected'));
+    item.classList.add('selected');
+    document.getElementById('sel-mac').value = mac;
+  };
+  list.appendChild(item);
+  if (selected) document.getElementById('sel-mac').value = mac;
+}
+
+// ── Save / reset config ───────────────────────────────────
+async function saveConfig() {
+  const mac     = document.getElementById('sel-mac').value;
+  const profile = document.getElementById('sel-model').value;
+  const bSel    = document.getElementById('sel-brand').value || 'Generic';
+  const mSel    = document.getElementById('sel-model').selectedOptions[0]?.text || '';
+  const brand   = (bSel + ' ' + mSel).trim();
+  const demo    = document.getElementById('demo-toggle').classList.contains('on');
+
+  if (!demo) {
+    if (!mac)     { toast('Seleziona un adattatore BLE', 'var(--amber)'); return; }
+    if (!profile) { toast('Seleziona un profilo veicolo', 'var(--amber)'); return; }
+  }
+
+  try {
+    const r = await fetch('/api/config/save', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        bleMac: mac, carBrand: brand, carProfile: profile, demoMode: demo,
+        homeSsid: document.getElementById('home-ssid').value,
+        homePass: document.getElementById('home-pass').value
+      })
+    });
+    const d = await r.json();
+    if (d.ok) toast('Salvato! Riavvio in corso...');
+    else      toast('Errore salvataggio', 'var(--red)');
+  } catch(e) { toast('Errore di rete', 'var(--red)'); }
+}
+
+async function resetConfig() {
+  await fetch('/api/config/reset', {method:'POST'});
+  toast('Reset effettuato, riavvio...');
+}
+
+// Salva solo il WiFi di casa (tab Update) — nessun riavvio
+async function saveWifi() {
+  const ssid = document.getElementById('home-ssid').value;
+  if (!ssid) { toast('Seleziona o scrivi una rete', 'var(--amber)'); return; }
+  try {
+    const r = await fetch('/api/config/save', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        homeSsid: ssid,
+        homePass: document.getElementById('home-pass').value,
+        noReboot: true
+      })
+    });
+    const d = await r.json();
+    if (d.ok) toast('WiFi salvato');
+    else      toast('Errore salvataggio', 'var(--red)');
+  } catch(e) { toast('Errore di rete', 'var(--red)'); }
+}
+
+// ── Schermate OLED ────────────────────────────────────────
+let scrAvail = [], scrActive = [];
+
+async function loadScreens() {
+  try {
+    const r = await fetch('/api/screens');
+    const d = await r.json();
+    scrAvail  = d.available || [];
+    scrActive = d.active    || [];
+  } catch(e) { scrAvail = []; scrActive = []; }
+  renderScreens();
+}
+
+function renderScreens() {
+  const act = document.getElementById('scr-active');
+  act.innerHTML = '';
+  scrActive.forEach((k, i) => {
+    const def = scrAvail.find(s => s.key === k) || {name:k.toUpperCase(), unit:''};
+    const row = document.createElement('div');
+    row.className = 'scr-item';
+    row.innerHTML = `
+      <div class="scr-pos">${String(i+1).padStart(2,'0')}</div>
+      <div class="scr-name">${def.name}<small>${def.unit||''}</small></div>
+      <button class="icon-btn" ${i===0?'disabled':''} onclick="scrMove(${i},-1)">▲</button>
+      <button class="icon-btn" ${i===scrActive.length-1?'disabled':''} onclick="scrMove(${i},1)">▼</button>
+      <button class="icon-btn del" onclick="scrDel(${i})">✕</button>`;
+    act.appendChild(row);
+  });
+
+  const add = document.getElementById('scr-add');
+  add.innerHTML = '';
+  const remaining = scrAvail.filter(s => !scrActive.includes(s.key));
+  document.getElementById('scr-add-empty').style.display = remaining.length ? 'none' : 'block';
+  remaining.forEach(s => {
+    const chip = document.createElement('div');
+    chip.className = 'scr-chip';
+    chip.textContent = s.name;
+    chip.onclick = () => { scrActive.push(s.key); renderScreens(); };
+    add.appendChild(chip);
+  });
+
+  renderAlerts();   // la tab Alert segue le schermate selezionate
+}
+
+function scrMove(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= scrActive.length) return;
+  [scrActive[i], scrActive[j]] = [scrActive[j], scrActive[i]];
+  renderScreens();
+}
+
+function scrDel(i) {
+  if (scrActive.length <= 1) { toast('Serve almeno una schermata', 'var(--amber)'); return; }
+  scrActive.splice(i, 1);
+  renderScreens();
+}
+
+async function saveScreens() {
+  if (!scrActive.length) { toast('Serve almeno una schermata', 'var(--amber)'); return; }
+  try {
+    const r = await fetch('/api/screens/save', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(scrActive)
+    });
+    const d = await r.json();
+    if (d.ok) toast('Display aggiornato');
+    else      toast('Errore salvataggio', 'var(--red)');
+  } catch(e) { toast('Errore di rete', 'var(--red)'); }
+}
+
+// ── Alerts (contestuali: solo i parametri delle schermate attive) ──
+const ALERT_DEFS = [
+  {pid:'IAT',     key:'iat',     warn:50,  danger:65},
+  {pid:'BOOST',   key:'boost',   warn:1.8, danger:2.2},
+  {pid:'TRANS',   key:'trans',   warn:90,  danger:110},
+  {pid:'COOLANT', key:'coolant', warn:100, danger:110},
+  {pid:'OIL',     key:'oil',     warn:120, danger:140},
+  {pid:'HVTEMP',  key:'hvtemp',  warn:45,  danger:55},
+];
+let alertsSaved = [];   // lista completa salvata sul device
+
+async function loadAlerts() {
+  try {
+    const r = await fetch('/api/alerts');
+    const j = await r.json();
+    alertsSaved = Array.isArray(j) ? j : [];
+  } catch(e) { alertsSaved = []; }
+  renderAlerts();
+}
+
+function renderAlerts() {
+  const rows = document.getElementById('alert-rows');
+  rows.innerHTML = '';
+  const visible = ALERT_DEFS.filter(d => scrActive.includes(d.key));
+  document.getElementById('alert-empty').style.display = visible.length ? 'none' : 'block';
+  visible.forEach(def => {
+    const a = alertsSaved.find(x => x.pid === def.pid)
+           || {pid:def.pid, warn:def.warn, danger:def.danger, buzzer:true};
+    const row = document.createElement('div');
+    row.className = 'alert-row';
+    row.dataset.pid = a.pid;
+    row.innerHTML = `
+      <div class="alert-pid">${a.pid}</div>
+      <input type="number" step="0.1" value="${a.warn}"   class="warn-inp">
+      <input type="number" step="0.1" value="${a.danger}" class="danger-inp">
+      <div class="toggle ${a.buzzer?'on':''}" onclick="this.classList.toggle('on')" style="justify-self:center"></div>`;
+    rows.appendChild(row);
+  });
+}
+
+async function saveAlerts() {
+  // Aggiorna/aggiunge i parametri visibili nella lista completa: le soglie
+  // dei gauge non attivi restano salvate (e attive sul device).
+  document.querySelectorAll('.alert-row').forEach(r => {
+    const item = {
+      pid:    r.dataset.pid,
+      warn:   parseFloat(r.querySelector('.warn-inp').value),
+      danger: parseFloat(r.querySelector('.danger-inp').value),
+      buzzer: r.querySelector('.toggle').classList.contains('on')
+    };
+    const i = alertsSaved.findIndex(a => a.pid === item.pid);
+    if (i >= 0) alertsSaved[i] = item; else alertsSaved.push(item);
+  });
+  try {
+    await fetch('/api/alerts/save', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(alertsSaved)
+    });
+    toast('Soglie salvate');
+  } catch(e) { toast('Errore', 'var(--red)'); }
+}
+
+// ── OTA ───────────────────────────────────────────────────
+let otaPollTimer = null;
+
+function onFileSelect() {
+  const f = document.getElementById('fw-file').files[0];
+  document.getElementById('fw-name').textContent = f ? f.name + ' (' + (f.size/1024).toFixed(1) + ' KB)' : '';
+  document.getElementById('btn-upload').disabled = !f;
+}
+
+function uploadFirmware() {
+  const file = document.getElementById('fw-file').files[0];
+  if (file) doOtaUpload(file);
+}
+
+function doOtaUpload(file) {
+  const card = document.getElementById('ota-progress-card');
+  const bar  = document.getElementById('progress-bar');
+  const msg  = document.getElementById('ota-msg');
+
+  document.getElementById('btn-upload').disabled = true;
+  card.style.display = 'block';
+  bar.style.width = '0%';
+  bar.style.background = 'var(--yel)';
+  msg.style.color = 'var(--dim)';
+  msg.textContent = 'Invio al dispositivo...';
+
+  const fd = new FormData();
+  fd.append('firmware', file, file.name || 'firmware.bin');
+
+  const xhr = new XMLHttpRequest();
+  xhr.upload.onprogress = e => {
+    if (e.lengthComputable) {
+      const pct = (e.loaded / e.total * 100).toFixed(0);
+      bar.style.width = pct + '%';
+      msg.textContent = 'Invio: ' + pct + '%';
+    }
+  };
+  xhr.onload = () => {
+    try {
+      const resp = JSON.parse(xhr.responseText);
+      bar.style.background = resp.ok ? 'var(--green)' : 'var(--red)';
+      msg.style.color      = resp.ok ? 'var(--green)' : 'var(--red)';
+      msg.textContent      = resp.msg;
+      if (!resp.ok) document.getElementById('btn-upload').disabled = false;
+    } catch(e) { msg.textContent = 'Risposta non valida dal dispositivo'; }
+  };
+  xhr.onerror = () => {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Errore di rete durante l\'invio';
+    document.getElementById('btn-upload').disabled = false;
+  };
+  xhr.open('POST', '/api/ota/update');
+  xhr.send(fd);
+}
+
+async function startGithubOTA() {
+  const msg = document.getElementById('gh-msg');
+  const btn = document.getElementById('btn-check');
+  btn.disabled = true;
+  msg.style.color = 'var(--dim)';
+  msg.textContent = 'Avvio aggiornamento sul dispositivo...';
+  try {
+    await fetch('/api/ota/github', { method: 'POST' });
+  } catch(e) {}
+  if (otaPollTimer) clearInterval(otaPollTimer);
+  otaPollTimer = setInterval(pollOtaStatus, 1000);
+}
+
+function stopOtaPoll() { if (otaPollTimer) { clearInterval(otaPollTimer); otaPollTimer = null; } }
+
+async function pollOtaStatus() {
+  const msg   = document.getElementById('gh-msg');
+  const latEl = document.getElementById('latest-ver');
+  try {
+    const r = await fetch('/api/ota/status');
+    const d = await r.json();
+    if (d.latest) latEl.textContent = 'v' + d.latest;
+
+    let color = 'var(--dim)', text = d.message || '';
+    switch (d.state) {
+      case 'connecting':  text = '▸ ' + d.message; break;
+      case 'checking':    text = '▸ ' + d.message; break;
+      case 'downloading': text = '▼ ' + d.message + ' ' + d.progress + '%'; color = 'var(--amber)'; break;
+      case 'no_update':   color = 'var(--green)'; stopOtaPoll(); document.getElementById('btn-check').disabled = false; break;
+      case 'failed':      color = 'var(--red)';   stopOtaPoll(); document.getElementById('btn-check').disabled = false; break;
+      case 'success':     color = 'var(--green)'; text = 'Completato, riavvio in corso...'; stopOtaPoll(); break;
+    }
+    msg.style.color = color;
+    msg.textContent = text;
+  } catch(e) {
+    msg.style.color = 'var(--amber)';
+    msg.textContent = 'Dispositivo occupato/in riavvio — ricollegati all\'hotspot tra poco e ricarica.';
+  }
+}
+
+async function reboot() {
+  await fetch('/api/reboot', {method:'POST'});
+  toast('Riavvio in corso...');
+}
+
+// ── Live ──────────────────────────────────────────────────
+const LIVE_METRICS = [
+  {key:'rpm',     label:'RPM',     unit:'',     min:0,   max:8000, dec:0},
+  {key:'boost',   label:'Boost',   unit:'bar',  min:0,   max:2.5,  dec:2, warn:1.8, danger:2.2},
+  {key:'iat',     label:'IAT',     unit:'°C',   min:-20, max:80,   dec:1, warn:50,  danger:65},
+  {key:'trans',   label:'Trans',   unit:'°C',   min:40,  max:150,  dec:1, warn:90,  danger:110},
+  {key:'oil',     label:'Oil',     unit:'°C',   min:40,  max:160,  dec:1, warn:120, danger:140},
+  {key:'soc',     label:'Batt SOC',unit:'%',    min:0,   max:100,  dec:0},
+  {key:'hvtemp',  label:'HV Temp', unit:'°C',   min:0,   max:60,   dec:1, warn:45,  danger:55},
+  {key:'coolant', label:'Coolant', unit:'°C',   min:40,  max:130,  dec:1, warn:100, danger:110},
+  {key:'speed',   label:'Speed',   unit:'km/h', min:0,   max:220,  dec:0},
+];
+
+let liveTimer = null;
+function startLivePolling() { if (!liveTimer) { pollLive(); liveTimer = setInterval(pollLive, 500); } }
+function stopLivePolling()  { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
+
+async function pollLive() {
+  try {
+    const r = await fetch('/api/live');
+    const d = await r.json();
+    renderLive(d);
+  } catch(e) {
+    document.getElementById('live-grid').innerHTML =
+      '<div class="live-offline">Nessuna risposta dal dispositivo</div>';
+  }
+}
+
+function renderLive(d) {
+  const grid = document.getElementById('live-grid');
+  const age  = document.getElementById('live-age');
+
+  const hasData = LIVE_METRICS.some(m => d[m.key] && d[m.key].valid);
+  if (!hasData) {
+    grid.innerHTML = '<div class="live-offline">In attesa di dati... (attiva Demo Mode o collega l\'OBD)</div>';
+    age.textContent = '';
+    return;
+  }
+  age.textContent = d.age != null ? (d.age/1000).toFixed(1) + 's' : '';
+
+  let html = '';
+  LIVE_METRICS.forEach(m => {
+    const item = d[m.key] || {v:0, valid:false};
+    const val  = item.v;
+    const valid = item.valid;
+    const pct  = Math.max(0, Math.min(100, (val - m.min) / (m.max - m.min) * 100));
+    let cls = '';
+    if (m.danger != null && val >= m.danger)      cls = 'danger';
+    else if (m.warn != null && val >= m.warn)     cls = 'warn';
+    const valStr = valid ? val.toFixed(m.dec) : '—';
+    html += `
+      <div class="live-item ${valid?'':'novalid'}">
+        <div class="live-head">
+          <span class="live-name">${m.label}</span>
+          <span class="live-val">${valStr}<span class="u">${m.unit}</span></span>
+        </div>
+        <div class="live-track"><div class="live-fill ${cls}" style="width:${valid?pct:0}%"></div></div>
+      </div>`;
+  });
+  grid.innerHTML = html;
+}
+
+// ── WiFi scan ─────────────────────────────────────────────
+let wifiScanTimer = null;
+
+async function scanWifi() {
+  const btn  = document.getElementById('btn-wifiscan');
+  const list = document.getElementById('wifi-list');
+  btn.disabled = true;
+  list.innerHTML = '<div class="hint">Scansione reti...</div>';
+  try { await fetch('/api/wifi/scan', { method:'POST' }); } catch(e) {}
+
+  if (wifiScanTimer) clearInterval(wifiScanTimer);
+  let tries = 0;
+  wifiScanTimer = setInterval(async () => {
+    tries++;
+    try {
+      const r = await fetch('/api/wifi/scan/results');
+      const d = await r.json();
+      if (d.scanning) return;
+      clearInterval(wifiScanTimer); wifiScanTimer = null;
+      btn.disabled = false;
+      renderWifiList(d.nets || []);
+    } catch(e) {
+      if (tries > 12) {
+        clearInterval(wifiScanTimer); wifiScanTimer = null; btn.disabled = false;
+        list.innerHTML = '<div class="hint" style="color:var(--red)">Scan fallito, riprova</div>';
+      }
+    }
+  }, 1000);
+}
+
+function renderWifiList(nets) {
+  const list = document.getElementById('wifi-list');
+  const seen = {};
+  nets.filter(n => n.ssid).forEach(n => {
+    if (!(n.ssid in seen) || n.rssi > seen[n.ssid].rssi) seen[n.ssid] = n;
+  });
+  const arr = Object.values(seen).sort((a, b) => b.rssi - a.rssi);
+  if (!arr.length) {
+    list.innerHTML = '<div class="hint">Nessuna rete trovata</div>';
+    return;
+  }
+  list.innerHTML = '';
+  arr.forEach(n => {
+    const bars = n.rssi > -60 ? '▮▮▮' : n.rssi > -75 ? '▮▮' : '▮';
+    const item = document.createElement('div');
+    item.className = 'dev-item';
+    item.innerHTML = `<div class="dev-name">${n.lock ? '🔒 ' : ''}${n.ssid}</div>
+                      <div class="dev-rssi">${bars}</div>`;
+    item.onclick = () => {
+      document.getElementById('home-ssid').value = n.ssid;
+      document.querySelectorAll('#wifi-list .dev-item').forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      document.getElementById('home-pass').focus();
+    };
+    list.appendChild(item);
+  });
+}
+
+// ── Buzzer ────────────────────────────────────────────────
+async function loadBuzzer() {
+  let cfg = { enabled:true, warnFreq:1700, dangerFreq:2100, dangerStyle:'continuo' };
+  try {
+    const r = await fetch('/api/buzzer');
+    const j = await r.json();
+    cfg = { ...cfg, ...j };
+  } catch(e) {}
+  // Migrazione stili vecchi (rimossi)
+  const styleMap = { sirena:'bitonale', beep:'impulsi' };
+  cfg.dangerStyle = styleMap[cfg.dangerStyle] || cfg.dangerStyle;
+  document.getElementById('bz-enabled').classList.toggle('on', !!cfg.enabled);
+  document.getElementById('bz-warn').value = cfg.warnFreq;
+  document.getElementById('bz-warn-val').textContent = cfg.warnFreq;
+  document.getElementById('bz-danger').value = cfg.dangerFreq;
+  document.getElementById('bz-danger-val').textContent = cfg.dangerFreq;
+  document.getElementById('bz-style').value = cfg.dangerStyle;
+}
+
+async function saveBuzzer() {
+  const data = {
+    enabled:     document.getElementById('bz-enabled').classList.contains('on'),
+    warnFreq:    parseInt(document.getElementById('bz-warn').value),
+    dangerFreq:  parseInt(document.getElementById('bz-danger').value),
+    dangerStyle: document.getElementById('bz-style').value
+  };
+  try {
+    await fetch('/api/buzzer/save', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+    });
+    toast('Buzzer salvato');
+  } catch(e) { toast('Errore', 'var(--red)'); }
+}
+
+async function testBuzzer(freq) {
+  try {
+    await fetch('/api/buzzer/test', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({freq:parseInt(freq)})
+    });
+  } catch(e) {}
+}
+
+// Preview dello stile danger selezionato, alla freq. DANGER corrente
+async function testStyle() {
+  try {
+    await fetch('/api/buzzer/test', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        freq:  parseInt(document.getElementById('bz-danger').value),
+        style: document.getElementById('bz-style').value
+      })
+    });
+  } catch(e) {}
+}
+
+// ── Init ──────────────────────────────────────────────────
+loadConfig();
+loadAlerts();
+loadBuzzer();
+loadScreens();
+</script>
+</body>
+</html>

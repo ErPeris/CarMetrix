@@ -4,6 +4,7 @@
 #include "ble_elm327.h"
 #include "github_ota.h"
 #include "alert_manager.h"
+#include "display_oled.h"
 #include "web_index.h"        // web UI compressa (embedded → OTA)
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
@@ -117,6 +118,14 @@ void WebServer::begin() {
   //  API: lista profili veicolo disponibili
   // ─────────────────────────────────────────────────────────
   server.on("/api/profiles", HTTP_GET, [](AsyncWebServerRequest* req) {
+    // Fast path: indice generato dal converter (marca/modello/extras),
+    // usato dalla web app per la selezione guidata a due step.
+    // I profili veri stanno nel bundle /profiles.json (vedi profile_loader).
+    if (LittleFS.exists("/profiles_index.json")) {
+      req->send(LittleFS, "/profiles_index.json", "application/json");
+      return;
+    }
+    // Fallback legacy: scansione piatta della cartella
     JsonDocument doc;
     JsonArray arr = doc.to<JsonArray>();
     File dir = LittleFS.open("/profiles");
@@ -178,6 +187,9 @@ void WebServer::begin() {
       add("iat",     liveData->iat);
       add("boost",   liveData->boost);
       add("trans",   liveData->transTemp);
+      add("oil",     liveData->oilTemp);
+      add("soc",     liveData->hvSoc);
+      add("hvtemp",  liveData->hvTemp);
       add("coolant", liveData->coolant);
       add("rpm",     liveData->rpm);
       add("speed",   liveData->speed);
@@ -212,10 +224,13 @@ void WebServer::begin() {
           const char* p = obj["homePass"];
           if (p && p[0] != '\0') strlcpy(cfg.homePass, p, sizeof(cfg.homePass));
         }
-        cfg.configured = true;
+        // noReboot = salvataggio parziale (es. solo WiFi dalla tab Update):
+        // non marca la config come completa e non riavvia.
+        bool noReboot = obj["noReboot"] | false;
+        if (!noReboot) cfg.configured = true;
         NVSConfig::save(cfg);
         jsonReply(req, 200, "{\"ok\":true}");
-        if (savedCallback) {
+        if (savedCallback && !noReboot) {
           delay(300);
           savedCallback();
         }
@@ -279,15 +294,51 @@ void WebServer::begin() {
       });
   server.addHandler(buzzerHandler);
 
-  // Test tono buzzer (preview per tarare il più forte/acuto)
+  // Test buzzer: solo freq = tono fisso (taratura); con "style" suona
+  // il pattern danger di quello stile (preview dalla tab Alert).
   AsyncCallbackJsonWebHandler* buzzerTestHandler =
     new AsyncCallbackJsonWebHandler("/api/buzzer/test",
       [](AsyncWebServerRequest* req, JsonVariant& json) {
-        int freq = json["freq"] | 2700;
-        AlertManager::requestTest(freq);   // il main loop suona il tono
+        int freq = json["freq"] | 2100;
+        const char* style = json["style"] | "";
+        AlertManager::requestTest(freq, style);   // il main loop suona
         jsonReply(req, 200, "{\"ok\":true}");
       });
   server.addHandler(buzzerTestHandler);
+
+  // ─────────────────────────────────────────────────────────
+  //  API: schermate OLED (set attivo + ordine, /screens.json)
+  // ─────────────────────────────────────────────────────────
+  server.on("/api/screens", HTTP_GET, [](AsyncWebServerRequest* req) {
+    JsonDocument doc;
+    JsonArray av = doc["available"].to<JsonArray>();
+    for (int i = 0; i < DisplayOled::availableCount(); i++) {
+      auto s = DisplayOled::availableScreen(i);
+      JsonObject o = av.add<JsonObject>();
+      o["key"]  = s.key;
+      o["name"] = s.name;
+      o["unit"] = s.unit;
+    }
+    JsonArray ac = doc["active"].to<JsonArray>();
+    for (int i = 0; i < DisplayOled::activeCount(); i++)
+      ac.add(DisplayOled::activeKey(i));
+    String out; serializeJson(doc, out);
+    jsonReply(req, 200, out);
+  });
+
+  AsyncCallbackJsonWebHandler* screensHandler =
+    new AsyncCallbackJsonWebHandler("/api/screens/save",
+      [](AsyncWebServerRequest* req, JsonVariant& json) {
+        if (!json.is<JsonArray>() || json.as<JsonArray>().size() == 0) {
+          jsonReply(req, 400, "{\"ok\":false,\"msg\":\"lista vuota\"}");
+          return;
+        }
+        File f = LittleFS.open("/screens.json", FILE_WRITE);
+        if (f) { serializeJson(json, f); f.close(); }
+        DisplayOled::loadScreens();   // applica subito, senza riavvio
+        jsonReply(req, 200, "{\"ok\":true}");
+      });
+  server.addHandler(screensHandler);
 
   // ─────────────────────────────────────────────────────────
   //  OTA: upload firmware .bin

@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Audi Q4 e tron","source":"OBDb/Audi-Q4-e-tron","protocol":"0","pids":[{"cmd":"22028C","hdr":"FC00","name":"SOC","unit":"%","target":"hv_soc","bix":0,"len":8,"mul":0.4,"add":0,"min":0,"max":100,"every":8,"src":"Q4ETRON_SOC"}]}

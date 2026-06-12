@@ -1,0 +1,1 @@
+{"schema":2,"brand":"BMW X7","source":"OBDb/BMW-X7","protocol":"0","pids":[{"cmd":"22DA25","hdr":"6F1","name":"OIL","unit":"°C","target":"oil_temp","bix":0,"len":16,"mul":1,"add":-48,"min":-500,"max":500,"every":4,"src":"X7_EOT","rax":"618","sign":true}]}

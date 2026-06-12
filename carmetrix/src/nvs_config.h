@@ -9,7 +9,7 @@
 struct CarMetrixConfig {
   char     bleMac[18];       // "AA:BB:CC:DD:EE:FF\0"
   char     carBrand[32];     // "Honda"
-  char     carProfile[48];   // "honda.json"
+  char     carProfile[64];   // "honda.json" o "toyota/yaris_hybrid.json"
   uint8_t  obdProtocol;      // 0 = auto-detect
   uint32_t pidMask1;         // PID supportati 01-20
   uint32_t pidMask2;         // PID supportati 21-40

@@ -1,0 +1,25 @@
+{
+  "schema": 2,
+  "brand": "BMW 1 Series (F20/F21)",
+  "source": "community: bimmerforums.co.uk (testato su 116i F20 2014). NB: F20 ante ~2014 potrebbero non esporre il dato via OBD",
+  "protocol": "6",
+  "pids": [
+    {
+      "cmd": "224402",
+      "hdr": "",
+      "rax": "",
+      "name": "OIL",
+      "unit": "°C",
+      "target": "oil_temp",
+      "bix": 8,
+      "len": 8,
+      "sign": false,
+      "mul": 1,
+      "add": -64,
+      "min": -40,
+      "max": 150,
+      "every": 4,
+      "src": "F20_OIL_TEMP_TORQUE_B-64"
+    }
+  ]
+}

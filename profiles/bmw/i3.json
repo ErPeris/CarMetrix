@@ -1,0 +1,1 @@
+{"schema":2,"brand":"BMW i3","source":"OBDb/BMW-i3","protocol":"0","pids":[{"cmd":"22DDBC","hdr":"6F1","name":"SOC","unit":"%","target":"hv_soc","bix":0,"len":16,"mul":0.1,"add":0,"min":0,"max":100,"every":4,"src":"I3_HVBAT_SOC","rax":"607"}]}

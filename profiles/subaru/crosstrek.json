@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Subaru Crosstrek","source":"OBDb/Subaru-Crosstrek","protocol":"6","pids":[{"cmd":"2210D2","hdr":"7A3","name":"TRANS","unit":"°C","target":"trans_temp","bix":0,"len":8,"mul":1,"add":-50,"min":-50,"max":205,"every":4,"src":"CROSSTREK_CVT_T","rax":"7AB"}]}

@@ -1,0 +1,1 @@
+{"schema":2,"brand":"BMW iX3","source":"OBDb/BMW-iX3","protocol":"0","pids":[{"cmd":"22E5CE","hdr":"6F1","name":"SOC","unit":"%","target":"hv_soc","bix":0,"len":16,"mul":0.01,"add":0,"min":0,"max":100,"every":4,"src":"IX3_HVBAT_SOC","rax":"607"}]}

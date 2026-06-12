@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Chevrolet Equinox EV","source":"OBDb/Chevrolet-Equinox-EV","protocol":"7","pids":[{"cmd":"2227C6","hdr":"DACB","name":"SOC","unit":"%","target":"hv_soc","bix":0,"len":16,"mul":0.0015259,"add":0,"min":0,"max":100,"every":8,"src":"EQUINOXEV_SOC_HD"}]}

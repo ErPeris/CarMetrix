@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Kia Soul","source":"OBDb/Kia-Soul","protocol":"6","pids":[{"cmd":"21A0","hdr":"7E1","name":"TRANS","unit":"°C","target":"trans_temp","bix":104,"len":8,"mul":1,"add":-40,"min":-40,"max":215,"every":4,"src":"SOUL_ATF_T","rax":"7E9"}]}

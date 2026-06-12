@@ -1,0 +1,32 @@
+{
+  "schema": 2,
+  "brand": "Toyota Yaris Hybrid",
+  "source": "derivato da OBDb/Toyota-Prius: i PID del sistema ibrido Toyota (THS) sono largamente condivisi tra modelli. SPERIMENTALE: verificare i valori in auto contro Car Scanner/Hybrid Assistant",
+  "protocol": "6",
+  "pids": [
+    {
+      "cmd": "221F5B", "hdr": "7D2", "rax": "7DA",
+      "name": "SOC", "unit": "%", "target": "hv_soc",
+      "bix": 0, "len": 8, "mul": 0.3921569, "add": 0,
+      "min": 0, "max": 100, "every": 2, "src": "PRIUS_SOC"
+    },
+    {
+      "cmd": "2210B2", "hdr": "7D2", "rax": "7DA",
+      "name": "HV TEMP", "unit": "°C", "target": "hv_temp",
+      "bix": 0, "len": 8, "mul": 1, "add": -40,
+      "min": -40, "max": 120, "every": 4, "src": "PRIUS_INVRT_COOLANT_T"
+    },
+    {
+      "cmd": "221F5C", "hdr": "700", "rax": "708",
+      "name": "OIL", "unit": "°C", "target": "oil_temp",
+      "bix": 0, "len": 8, "mul": 1, "add": -40,
+      "min": -40, "max": 160, "every": 4, "src": "PRIUS_EOT_V2"
+    },
+    {
+      "cmd": "2182", "hdr": "7E0", "rax": "7E8",
+      "name": "TRANS", "unit": "°C", "target": "trans_temp",
+      "bix": 0, "len": 16, "mul": 0.00390625, "add": -40,
+      "min": -40, "max": 160, "every": 4, "src": "PRIUS_ATF_PAN_T (mode 21)"
+    }
+  ]
+}

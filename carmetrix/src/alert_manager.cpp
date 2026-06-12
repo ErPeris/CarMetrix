@@ -10,9 +10,10 @@ static bool        flashFlag         = false;
 static unsigned long lastBuzzerMs    = 0;
 static bool        buzzerActive      = false;
 
-// ── Configurazione buzzer (default = forte e acuto, non "sveglia") ──
-static BuzzerConfig bz = { true, 1800, 2700, "sirena" };
+// ── Configurazione buzzer (default = risonanza misurata, max volume) ──
+static BuzzerConfig bz = { true, 1700, 2100, "continuo" };
 static volatile int testFreq = 0;
+static char         testStyle[12] = "";
 
 // ── Default soglie ────────────────────────────────────────────
 static const AlertThreshold DEFAULTS[] = {
@@ -20,6 +21,8 @@ static const AlertThreshold DEFAULTS[] = {
   { "BOOST",    1.8f,   2.2f,  true },
   { "TRANS",   90.0f, 110.0f,  true },
   { "COOLANT", 100.0f, 110.0f, true },
+  { "OIL",     120.0f, 140.0f, true },
+  { "HVTEMP",  45.0f,  55.0f,  true },
 };
 
 // ── Buzzer helper (rinominato per evitare conflitto con tone() di Arduino) ──
@@ -54,38 +57,45 @@ void AlertManager::loadBuzzerCfg() {
   if (deserializeJson(d, f)) { f.close(); return; }
   f.close();
   bz.enabled    = d["enabled"]    | true;
-  bz.warnFreq   = d["warnFreq"]   | 1800;
-  bz.dangerFreq = d["dangerFreq"] | 2700;
-  strlcpy(bz.dangerStyle, d["dangerStyle"] | "sirena", sizeof(bz.dangerStyle));
+  bz.warnFreq   = d["warnFreq"]   | 1700;
+  bz.dangerFreq = d["dangerFreq"] | 2100;
+  strlcpy(bz.dangerStyle, d["dangerStyle"] | "continuo", sizeof(bz.dangerStyle));
+  // Migrazione stili vecchi (rimossi perché sgradevoli)
+  if (strcmp(bz.dangerStyle, "sirena") == 0) strlcpy(bz.dangerStyle, "bitonale", sizeof(bz.dangerStyle));
+  if (strcmp(bz.dangerStyle, "beep")   == 0) strlcpy(bz.dangerStyle, "impulsi",  sizeof(bz.dangerStyle));
 }
 
 const BuzzerConfig& AlertManager::buzzerCfg() { return bz; }
 
-void AlertManager::requestTest(int freq) { testFreq = freq; }
+void AlertManager::requestTest(int freq, const char* style) {
+  strlcpy(testStyle, style ? style : "", sizeof(testStyle));
+  testFreq = freq;
+}
+
+// Riproduce il pattern danger nello stile dato. Pattern pensati per un
+// buzzer passivo: niente sweep PWM (suona "sveglia"), solo toni netti.
+static void playDangerStyle(int f, const char* style) {
+  String s = style;
+  if (s == "impulsi") {            // beep ritmati netti
+    for (int i = 0; i < 4; i++) { beeperTone(f, 140); delay(80); }
+  } else if (s == "bitonale") {    // due toni alternati, stile sirena EU
+    for (int i = 0; i < 3; i++) { beeperTone(f, 180); beeperTone(f * 4 / 5, 180); }
+  } else if (s == "allarme") {     // alternanza rapida, "red alert"
+    for (int i = 0; i < 5; i++) { beeperTone(f, 80); beeperTone(f * 17 / 20, 80); }
+  } else {                         // "continuo" — tono fisso, max volume
+    beeperTone(f, 900);
+  }
+}
 
 void AlertManager::serviceTest() {
   if (testFreq <= 0) return;
   int f = testFreq;
   testFreq = 0;
-  beeperTone(f, 700);   // tono continuo per valutare volume/acutezza
+  if (testStyle[0]) playDangerStyle(f, testStyle);  // preview stile danger
+  else              beeperTone(f, 700);             // tono fisso per tarare la freq.
 }
 
-// Riproduce il tono danger secondo lo stile configurato
-static void playDanger() {
-  int f = bz.dangerFreq;
-  String s = bz.dangerStyle;
-  if (s == "continuo") {
-    beeperTone(f, 900);
-  } else if (s == "beep") {
-    for (int i = 0; i < 3; i++) { beeperTone(f, 110); delay(70); }
-  } else {  // "sirena" — sweep su/giù, acuto e penetrante
-    for (int sweep = 0; sweep < 2; sweep++) {
-      for (int x = f * 6 / 10; x <= f; x += 90) { ledcWriteTone(PIN_BUZZER, x); delay(14); }
-      for (int x = f; x >= f * 6 / 10; x -= 90) { ledcWriteTone(PIN_BUZZER, x); delay(14); }
-    }
-    ledcWriteTone(PIN_BUZZER, 0);
-  }
-}
+static void playDanger() { playDangerStyle(bz.dangerFreq, bz.dangerStyle); }
 
 void AlertManager::loadThresholds() {
   thresholds.clear();
@@ -150,6 +160,8 @@ AlertLevel AlertManager::evaluate(const OBDData& data) {
   check("BOOST",   data.boost);
   check("TRANS",   data.transTemp);
   check("COOLANT", data.coolant);
+  check("OIL",     data.oilTemp);
+  check("HVTEMP",  data.hvTemp);
 
   // Aggiorna stato globale
   if (worst != currentAlertLevel) {
@@ -169,6 +181,13 @@ AlertLevel AlertManager::evaluate(const OBDData& data) {
 }
 
 // ── Feedback sonori ───────────────────────────────────────────
+void AlertManager::beepBoot() {
+  // Avvio: due tick + tono pieno, tutto alla risonanza (BUZZER_FREQ_BOOT)
+  beeperTone(BUZZER_FREQ_BOOT, 30); delay(35);
+  beeperTone(BUZZER_FREQ_BOOT, 30); delay(35);
+  beeperTone(BUZZER_FREQ_BOOT, 200);
+}
+
 void AlertManager::beepConfirm() {
   beeperTone(1000, 80); delay(50); beeperTone(1400, 80);
   lastBuzzerMs = millis();

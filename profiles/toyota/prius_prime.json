@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Toyota Prius Prime","source":"OBDb/Toyota-Prius-Prime","protocol":"6","pids":[{"cmd":"221F5B","hdr":"7D2","name":"SOC","unit":"%","target":"hv_soc","bix":0,"len":8,"mul":0.39215686,"add":0,"min":0,"max":100,"every":4,"src":"PRIUSPRIME_SOC"}]}

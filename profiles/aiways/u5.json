@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Aiways U5","source":"OBDb/Aiways-U5","protocol":"6","pids":[{"cmd":"221007","hdr":"703","name":"SOC","unit":"%","target":"hv_soc","bix":0,"len":8,"mul":1,"add":0,"min":0,"max":100,"every":4,"src":"U5_SOC"}]}

@@ -6,18 +6,28 @@
 // ============================================================
 //  CarMetrix — display_oled.h
 //  Renderer OLED SSD1306 128x64 bicolore (U8g2)
+//  Schermate dinamiche: registry PID standard, set attivo e ordine
+//  configurabili dalla web app (persistiti in /screens.json).
 //  Quando arriverà il TFT, questo file resta invariato
 //  e si aggiunge display_tft.h con la stessa interfaccia
 // ============================================================
 
-enum OledScreen { SCR_IAT = 0, SCR_BOOST, SCR_TRANS, SCR_RPM, SCR_COUNT };
-
 namespace DisplayOled {
   void begin();
 
-  // Schermate normali
-  void showData(const OBDData& data, OledScreen scr, AlertLevel alert);
+  // ── Registry schermate (PID standard già decodificati) ────
+  struct ScreenInfo { const char* key; const char* name; const char* unit; };
+  int        availableCount();          // schermate nel registry
+  ScreenInfo availableScreen(int i);
+  int        activeCount();             // schermate attive (>=1)
+  const char* activeKey(int i);
+  void       loadScreens();             // (ri)legge /screens.json e applica
+
+  // Schermate dati: scrIdx = indice nella lista attiva
+  void showData(const OBDData& data, int scrIdx, AlertLevel alert);
   void nextScreen();
+  void setScreen(int idx);
+  int  currentScreen();
 
   // Schermate di sistema
   void showBoot();
@@ -27,6 +37,5 @@ namespace DisplayOled {
   void showNoConnection();  // BLE disconnesso
   void showFlash();         // frame bianco per alert danger
   void showMessage(const char* line1, const char* line2 = nullptr);
-
-  OledScreen currentScreen();
+  void showResetConfirm(unsigned long heldMs);  // conferma factory reset
 }

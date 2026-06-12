@@ -3,6 +3,8 @@
 #include "config.h"
 #include "profile_loader.h"
 #include <math.h>
+#include <vector>
+#include <algorithm>
 
 // ── Helper formula semplice A*k+q ────────────────────────────
 // Supporta: "A*k+q", "A*k-q", "(A*256+B)/k", "(A-40)"
@@ -126,63 +128,358 @@ OBDValue OBDDecoder::decodeMode22(const char* name, const char* unit,
 }
 
 // ============================================================
-//  POLL COMPLETO
+//  DECODIFICA STRUTTURATA (profili schema 2, formato OBDb)
 // ============================================================
-static unsigned long lastPollMs = 0;
+// Estrae `len` bit big-endian a partire dal bit `bix` del payload
+// (dopo l'echo 62+pid), applica sign/mul/div/add e clampa su mn/mx.
+static OBDValue decodeStructured(const ProfileLoader::ExtendedPID& p,
+                                 const ElmResponse& r) {
+  OBDValue v;
+  v.valid = false; v.value = 0;
+  strlcpy(v.name, p.name, sizeof(v.name));
+  strlcpy(v.unit, p.unit, sizeof(v.unit));
 
-void OBDDecoder::pollAll(OBDData& data, bool hasExtended) {
-  if (millis() - lastPollMs < OBD_POLL_INTERVAL) return;
-  lastPollMs = millis();
+  if (!r.ok) return v;
+  uint16_t lastBit = p.bix + p.len;
+  if (p.len == 0 || p.len > 32) return v;
+  if ((uint16_t)((lastBit + 7) / 8) > r.len) return v;  // payload troppo corto
 
-  if (!BleElm327::isConnected()) return;
-
-  // ── Mode 01 standard ─────────────────────────────────────
-  auto r0F = BleElm327::queryPID(0x01, 0x0F);
-  data.iat = decodeMode01(0x0F, r0F);
-
-  auto r0B = BleElm327::queryPID(0x01, 0x0B);
-  data.map = decodeMode01(0x0B, r0B);
-
-  // Boost = MAP - pressione atmosferica (approssimata 101.3 kPa)
-  if (data.map.valid) {
-    data.boost.value = (data.map.value - 101.3f) / 100.0f; // bar
-    data.boost.valid = true;
-    strlcpy(data.boost.name, "BOOST",   sizeof(data.boost.name));
-    strlcpy(data.boost.unit, "bar",     sizeof(data.boost.unit));
+  uint32_t raw = 0;
+  for (uint16_t b = 0; b < p.len; b++) {
+    uint16_t bitIdx = p.bix + b;
+    uint8_t byte = r.bytes[bitIdx / 8];
+    raw = (raw << 1) | ((byte >> (7 - (bitIdx % 8))) & 1);
   }
 
-  auto r05 = BleElm327::queryPID(0x01, 0x05);
-  data.coolant = decodeMode01(0x05, r05);
+  float val;
+  if (p.sign && p.len < 32 && (raw & (1UL << (p.len - 1)))) {
+    val = (float)(int32_t)(raw | (~0UL << p.len));   // estensione di segno
+  } else {
+    val = (float)raw;
+  }
+  val = val * p.mul / p.div + p.add;
 
-  auto r0C = BleElm327::queryPID(0x01, 0x0C);
-  data.rpm = decodeMode01(0x0C, r0C);
+  if (val < p.mn || val > p.mx) return v;  // fuori range fisico → scarta
+  v.value = val;
+  v.valid = true;
+  return v;
+}
 
-  auto r0D = BleElm327::queryPID(0x01, 0x0D);
-  data.speed = decodeMode01(0x0D, r0D);
+// ============================================================
+//  POLLING NON BLOCCANTE (stile Car Scanner)
+// ============================================================
+// Una sola query in volo alla volta: pollTick invia, ritorna subito, e al
+// giro di loop successivo controlla se è arrivato il prompt '>'. Appena
+// arriva decodifica e invia il PID successivo → nessun busy-wait, display
+// sempre fluido. PID lenti (temperature) hanno uno skip-rate; PID che
+// falliscono ripetutamente vengono sospesi e ritentati più tardi.
 
-  auto r11 = BleElm327::queryPID(0x01, 0x11);
-  data.throttle = decodeMode01(0x11, r11);
+// Maschera 0100 (PID 01-20): i PID che la ECU dichiara di non supportare
+// non vengono interrogati (es. Civic in 29-bit funzionale: niente 05/0F).
+static uint32_t supportedMask1 = 0;
+void OBDDecoder::setSupportedMask(uint32_t mask1) { supportedMask1 = mask1; }
+static bool pidSupported(uint8_t pid) {
+  if (supportedMask1 == 0) return true;  // maschera ignota → prova tutto
+  if (pid < 0x01 || pid > 0x20) return true;
+  return supportedMask1 & (1UL << (32 - pid));
+}
 
-  // ── Mode 22 esteso (profilo produttore) ──────────────────
+struct PollItem {
+  uint8_t       mode;            // 0x01 o 0x22
+  uint16_t      pid;
+  uint8_t       every;           // interroga ogni N giri (1 = sempre)
+  uint8_t       fails;           // fallimenti consecutivi
+  unsigned long suspendedUntil;  // 0 = attivo
+  int8_t        extIdx;          // indice PID esteso del profilo, -1 = Mode 01
+};
+
+static std::vector<PollItem> pollList;
+static uint32_t builtMask     = 0xFFFFFFFF;  // sentinel: lista non costruita
+static bool     builtExtended = false;
+static size_t   pollIdx  = 0;
+static uint32_t roundNum = 0;
+static bool     awaiting = false;
+static char     awaitingHdr[8];
+
+// Mini-coda comandi AT per lo switch header (profili schema 2: PID su ECU
+// diverse). Prima di una query con hdr diverso dall'attivo si inviano
+// ATSH/ATCRA, uno per tick, poi parte la query vera.
+static String  pendingCmds[3];
+static int     pendingCount = 0, pendingIdx = 0;
+static bool    pendingAwaiting = false;
+static String  pendingTarget;
+
+static const char* itemHdr(const PollItem& it) {
+  if (it.extIdx < 0) return "";
+  return ProfileLoader::getExtendedPIDs()[it.extIdx].hdr;
+}
+
+// true = switch accodato (chiamante deve attendere i prossimi tick)
+static bool queueHeaderSwitch(const char* want, const char* rax) {
+  pendingTarget = want;
+  pendingCount = want[0]
+    ? BleElm327::getHeaderCmds(want, rax, pendingCmds)
+    : BleElm327::getDefaultHeaderCmds(pendingCmds);
+  pendingIdx = 0;
+  pendingAwaiting = false;
+  if (pendingCount == 0) {  // protocollo senza header gestiti: nulla da fare
+    BleElm327::setActiveHdr(want);
+    return false;
+  }
+  return true;
+}
+
+// Standby: tutti i PID veloci sospesi (quadro spento, ECU muta con BLE su).
+// Niente giri normali: un solo probe 0100 ogni OBD_STANDBY_PROBE_MS, alla
+// prima risposta si azzerano le sospensioni e riparte il polling pieno.
+static bool          standby = false;
+static bool          standbyAwaiting = false;
+static unsigned long lastStandbyProbeMs = 0;
+
+bool OBDDecoder::isStandby() { return standby; }
+
+static void buildPollList(bool hasExtended) {
+  pollList.clear();
+  auto add = [](uint8_t mode, uint16_t pid, uint8_t every, int8_t extIdx) {
+    pollList.push_back({mode, pid, every, 0, 0, extIdx});
+  };
+  // Veloci: ogni giro
+  if (pidSupported(0x0B)) add(0x01, 0x0B, 1, -1);  // MAP → boost
+  if (pidSupported(0x0C)) add(0x01, 0x0C, 1, -1);  // RPM
+  if (pidSupported(0x0D)) add(0x01, 0x0D, 1, -1);  // speed
+  if (pidSupported(0x11)) add(0x01, 0x11, 1, -1);  // throttle
+  // Lente: ogni 4 giri (cambiano in secondi, non in millisecondi)
+  if (pidSupported(0x05)) add(0x01, 0x05, 4, -1);  // coolant
+  if (pidSupported(0x0F)) add(0x01, 0x0F, 4, -1);  // IAT
   if (hasExtended) {
+    // Raggruppa per header ECU: minimizza gli switch ATSH/ATCRA nel giro
     const auto& pids = ProfileLoader::getExtendedPIDs();
-    for (const auto& p : pids) {
-      // Query Mode 22 con parsing byte corretto (header "62"+pid)
-      auto re = BleElm327::queryPID22(p.pidHex);
-      OBDValue v = decodeMode22(p.name, p.unit, p.formula, re);
-      if (!v.valid) continue;
-      switch (p.target) {
-        case ProfileLoader::TARGET_TRANS_TEMP: data.transTemp = v; break;
-        case ProfileLoader::TARGET_BOOST:      data.boost     = v; break;
-        // oil_temp / turbo_rpm / custom: estendibili qui
-        default: break;
+    std::vector<int> order;
+    for (size_t i = 0; i < pids.size(); i++) order.push_back((int)i);
+    std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
+      return strcmp(pids[a].hdr, pids[b].hdr) < 0;
+    });
+    for (int i : order)
+      add(pids[i].mode, pids[i].pidHex,
+          pids[i].every ? pids[i].every : 4, (int8_t)i);
+  }
+  builtMask     = supportedMask1;
+  builtExtended = hasExtended;
+  pollIdx = 0; roundNum = 0; awaiting = false;
+  standby = false; standbyAwaiting = false;
+  pendingCount = 0; pendingAwaiting = false;
+}
+
+// Quadro spento? Tutti gli item Mode 01 a giro pieno (every==1) sospesi.
+// I soli Mode 22 sospesi non bastano (possono essere PID sbagliati).
+static bool allFastPidsSuspended() {
+  bool anyFast = false;
+  for (const auto& it : pollList) {
+    if (it.mode != 0x01 || it.every != 1) continue;
+    anyFast = true;
+    if (it.suspendedUntil == 0) return false;
+  }
+  return anyFast;
+}
+
+static void clearSuspensions() {
+  for (auto& it : pollList) { it.suspendedUntil = 0; it.fails = 0; }
+}
+
+static void applyMode01(OBDData& d, uint8_t pid, const OBDValue& v) {
+  // Un poll fallito NON azzera il valore: si tiene l'ultimo valido
+  if (!v.valid) return;
+  switch (pid) {
+    case 0x05: d.coolant  = v; break;
+    case 0x0F: d.iat      = v; break;
+    case 0x0C: d.rpm      = v; break;
+    case 0x0D: d.speed    = v; break;
+    case 0x11: d.throttle = v; break;
+    case 0x04: d.load     = v; break;
+    case 0x5F: d.transTemp = v; break;
+    case 0x0B:
+      d.map = v;
+      // Boost = MAP - pressione atmosferica (approssimata 101.3 kPa)
+      d.boost.value = (v.value - 101.3f) / 100.0f;  // bar
+      d.boost.valid = true;
+      strlcpy(d.boost.name, "BOOST", sizeof(d.boost.name));
+      strlcpy(d.boost.unit, "bar",   sizeof(d.boost.unit));
+      break;
+    default: break;
+  }
+}
+
+void OBDDecoder::pollTick(OBDData& data, bool hasExtended) {
+  if (!BleElm327::isConnected()) { awaiting = false; return; }
+  if (builtMask != supportedMask1 || builtExtended != hasExtended ||
+      pollList.empty())
+    buildPollList(hasExtended);
+  if (pollList.empty()) return;
+
+  // ── Switch header in corso? (un comando AT per tick) ─────
+  if (pendingCount > 0) {
+    if (pendingAwaiting) {
+      String raw;
+      int st = BleElm327::pollAsync(raw, OBD_QUERY_TIMEOUT);
+      if (st == 0) return;
+      pendingAwaiting = false;
+      if (st < 0) {           // timeout AT: stato header incerto
+        BleElm327::setActiveHdr("?");
+        pendingCount = 0;
+        return;
+      }
+      pendingIdx++;
+      if (pendingIdx >= pendingCount) {
+        BleElm327::setActiveHdr(pendingTarget.c_str());
+        pendingCount = 0;
       }
     }
+    if (pendingCount > 0 && !pendingAwaiting) {
+      if (BleElm327::sendAsync(pendingCmds[pendingIdx].c_str()))
+        pendingAwaiting = true;
+    }
+    return;
   }
 
-  data.lastUpdateMs = millis();
-  data.anyValid = data.iat.valid || data.boost.valid ||
-                  data.coolant.valid || data.rpm.valid;
+  // ── Standby: solo probe 0100 ogni OBD_STANDBY_PROBE_MS ───
+  if (standby) {
+    if (standbyAwaiting) {
+      String raw;
+      int st = BleElm327::pollAsync(raw, OBD_QUERY_TIMEOUT);
+      if (st == 0) return;
+      standbyAwaiting = false;
+      if (st == 1 && BleElm327::parseResponse(raw, "4100").ok) {
+        Serial.println("[OBD] ECU di nuovo attiva -> riprendo il polling");
+        clearSuspensions();
+        standby = false;
+        awaiting = false;
+      }
+      return;
+    }
+    if (millis() - lastStandbyProbeMs >= OBD_STANDBY_PROBE_MS) {
+      // Il probe va fatto sull'header di default (ECM/funzionale)
+      if (strcmp(BleElm327::activeHdr(), "") != 0) {
+        if (queueHeaderSwitch("", "")) return;
+      }
+      lastStandbyProbeMs = millis();
+      char cmd[8];
+      int n = BleElm327::getEcuCount();
+      if (n >= 1 && n <= 9) snprintf(cmd, sizeof(cmd), "0100%d", n);
+      else                  snprintf(cmd, sizeof(cmd), "0100");
+      if (BleElm327::sendAsync(cmd)) standbyAwaiting = true;
+    }
+    return;
+  }
+
+  // ── Risposta in volo? ────────────────────────────────────
+  if (awaiting) {
+    String raw;
+    int st = BleElm327::pollAsync(raw, OBD_QUERY_TIMEOUT);
+    if (st == 0) return;  // ancora in attesa: il loop resta libero
+
+    PollItem& it = pollList[pollIdx];
+    bool ok = false;
+    if (st == 1) {
+      ElmResponse r = BleElm327::parseResponse(raw, awaitingHdr);
+      ok = r.ok;
+      if (ok) {
+        if (it.mode == 0x01) {
+          applyMode01(data, (uint8_t)it.pid, decodeMode01((uint8_t)it.pid, r));
+        } else {
+          const auto& p = ProfileLoader::getExtendedPIDs()[it.extIdx];
+          OBDValue v = p.structured ? decodeStructured(p, r)
+                                    : decodeMode22(p.name, p.unit, p.formula, r);
+          if (v.valid) {
+            switch (p.target) {
+              case ProfileLoader::TARGET_TRANS_TEMP: data.transTemp = v; break;
+              case ProfileLoader::TARGET_BOOST:      data.boost     = v; break;
+              case ProfileLoader::TARGET_OIL_TEMP:   data.oilTemp   = v; break;
+              case ProfileLoader::TARGET_HV_SOC:     data.hvSoc     = v; break;
+              case ProfileLoader::TARGET_HV_TEMP:    data.hvTemp    = v; break;
+              default: break;
+            }
+          }
+        }
+      }
+      Serial.printf("[OBD] %s -> %s (ok=%d)\n",
+                    BleElm327::lastCmd().c_str(), raw.c_str(), ok);
+    } else {
+      Serial.printf("[OBD] %s -> timeout\n", BleElm327::lastCmd().c_str());
+    }
+
+    if (ok) {
+      it.fails = 0;
+    } else if (++it.fails >= OBD_PID_MAX_FAILS) {
+      it.suspendedUntil = millis() + OBD_PID_RETRY_MS;
+      it.fails = 0;
+      Serial.printf("[OBD] PID mode=%02X pid=%04X sospeso (%d fail di fila)\n",
+                    it.mode, it.pid, OBD_PID_MAX_FAILS);
+      if (allFastPidsSuspended()) {
+        standby = true;
+        lastStandbyProbeMs = millis();  // primo probe tra OBD_STANDBY_PROBE_MS
+        Serial.println("[OBD] ECU muta su tutti i PID -> STANDBY (probe ogni 10s)");
+      }
+    }
+
+    awaiting = false;
+    pollIdx++;
+    data.lastUpdateMs = millis();
+    data.anyValid = data.iat.valid || data.boost.valid ||
+                    data.coolant.valid || data.rpm.valid;
+  }
+
+  // ── Invia la prossima query eleggibile ───────────────────
+  for (size_t scan = 0; scan < pollList.size() && !awaiting; scan++) {
+    if (pollIdx >= pollList.size()) { pollIdx = 0; roundNum++; }
+    PollItem& it = pollList[pollIdx];
+
+    if (it.suspendedUntil && millis() >= it.suspendedUntil)
+      it.suspendedUntil = 0;  // pausa scaduta → riprova
+    bool eligible = it.suspendedUntil == 0 && (roundNum % it.every) == 0;
+    if (!eligible) { pollIdx++; continue; }
+
+    // Header giusto per questa ECU? Se no, accoda ATSH/ATCRA e riprova
+    // questo stesso item al prossimo tick (pollIdx non avanza).
+    const char* want = itemHdr(it);
+    if (strcmp(want, BleElm327::activeHdr()) != 0) {
+      const char* rax = (it.extIdx >= 0)
+        ? ProfileLoader::getExtendedPIDs()[it.extIdx].rax : "";
+      if (queueHeaderSwitch(want, rax)) return;
+    }
+
+    // Suffisso "risposte attese" (datasheet ELM327): con N note l'ELM
+    // ritorna appena ricevute, senza aspettare il timeout del bus.
+    // NIENTE suffisso sulle risposte multi-frame (verrebbero troncate).
+    char cmd[12];
+    int n = BleElm327::getEcuCount();
+    if (it.mode == 0x01) {
+      if (n >= 1 && n <= 9)
+        snprintf(cmd, sizeof(cmd), "%02X%02X%d", it.mode, (uint8_t)it.pid, n);
+      else
+        snprintf(cmd, sizeof(cmd), "%02X%02X", it.mode, (uint8_t)it.pid);
+      snprintf(awaitingHdr, sizeof(awaitingHdr), "%02X%02X",
+               it.mode + 0x40, (uint8_t)it.pid);
+    } else {
+      const auto& p = ProfileLoader::getExtendedPIDs()[it.extIdx];
+      bool singleFrame = !p.structured || (uint16_t)(p.bix + p.len) <= 32;
+      if (it.mode == 0x22) {
+        // Mode 22: PID a 4 hex (UDS DID)
+        snprintf(cmd, sizeof(cmd), singleFrame ? "%02X%04X1" : "%02X%04X",
+                 it.mode, it.pid);
+        snprintf(awaitingHdr, sizeof(awaitingHdr), "%02X%04X",
+                 it.mode + 0x40, it.pid);
+      } else {
+        // Mode 21 (Toyota legacy) e simili: PID a 2 hex
+        snprintf(cmd, sizeof(cmd), singleFrame ? "%02X%02X1" : "%02X%02X",
+                 it.mode, (uint8_t)it.pid);
+        snprintf(awaitingHdr, sizeof(awaitingHdr), "%02X%02X",
+                 it.mode + 0x40, (uint8_t)it.pid);
+      }
+    }
+
+    if (BleElm327::sendAsync(cmd)) awaiting = true;
+    else break;  // BLE non pronto: riprova al prossimo tick
+  }
 }
 
 // ============================================================

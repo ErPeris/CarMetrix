@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Land Rover All","source":"OBDb/Land-Rover","protocol":"6","pids":[{"cmd":"224910","hdr":"7E4","name":"SOC","unit":"%","target":"hv_soc","bix":0,"len":16,"mul":0.01,"add":0,"min":0,"max":100,"every":1,"src":"LANDROVER_SOC"}]}

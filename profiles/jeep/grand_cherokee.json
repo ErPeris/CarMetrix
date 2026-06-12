@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Jeep Grand Cherokee","source":"OBDb/Jeep-Grand-Cherokee","protocol":"6","pids":[{"cmd":"2118","hdr":"7E1","name":"TRANS","unit":"°C","target":"trans_temp","bix":0,"len":16,"mul":0.015625,"add":-40,"min":-40,"max":983.984375,"every":4,"src":"GRANDCHEROKEE_ATF_T_3RDGEN","rax":"7E9"}]}

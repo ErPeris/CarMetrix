@@ -24,3 +24,10 @@ desktop.ini
 # ── Credenziali locali (vedi secrets.h.example) ──
 # Non committare mai SSID/password reali
 secrets.h
+
+# ── Materiale di analisi locale (MAI nel repo pubblico) ──
+*.apk
+log*.txt
+
+# ── Claude Code locale ──
+.claude/settings.local.json

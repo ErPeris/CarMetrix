@@ -5,7 +5,7 @@
 //  Pin definitions, costanti globali, versione firmware
 // ============================================================
 
-#define CARMETRIX_VERSION "0.3.2"
+#define CARMETRIX_VERSION "0.3.5"
 
 // ── OTA da GitHub ────────────────────────────────────────────
 // Il web app interroga le Release di questo repo per nuovi firmware.
@@ -15,7 +15,7 @@
 
 // ── Pin hardware ─────────────────────────────────────────────
 #define PIN_BUTTON   2    // bottone navigazione (INPUT_PULLUP → GND)
-#define PIN_BUZZER   4    // buzzer passivo PWM
+#define PIN_BUZZER   3    // buzzer passivo PWM (spostato da GPIO 4)
 #define OLED_SDA     8
 #define OLED_SCL     9
 
@@ -40,33 +40,40 @@
 #define BLE_CONNECT_TIMEOUT 10000 // ms timeout connessione
 #define BLE_RECONNECT_EVERY 3000  // ms tra tentativi riconnessione
 #define ELM_CMD_TIMEOUT     5000  // ms — generoso per la ricerca protocollo (SEARCHING)
+#define ELM_RESP_MAX        64    // byte max payload risposta (multi-frame ISO-TP)
 
 // ── OBD polling ──────────────────────────────────────────────
-#define OBD_POLL_INTERVAL  250    // ms tra poll (4 volte/sec)
+#define OBD_POLL_INTERVAL  250    // ms tra aggiornamenti DEMO (il polling reale è continuo)
 #define OBD_DATA_TIMEOUT   5000   // ms senza dati → "NO DATA"
+#define OBD_QUERY_TIMEOUT  1500   // ms max per singola query async in MONITORING
+#define OBD_PID_MAX_FAILS  5      // fallimenti consecutivi → PID sospeso
+#define OBD_PID_RETRY_MS   60000  // riprova un PID sospeso dopo 1 minuto
+#define OBD_STANDBY_PROBE_MS 10000 // in standby (ECU muta): probe 0100 ogni 10s
 
 // ── Buzzer ───────────────────────────────────────────────────
 #define BUZZER_CHANNEL    0
 #define BUZZER_FREQ_WARN  1200  // Hz
 #define BUZZER_FREQ_DANGER 2400 // Hz
+#define BUZZER_FREQ_BOOT  2100  // Hz — risonanza misurata del buzzer (max volume)
 #define BUZZER_RESOLUTION 8     // bit PWM
 
 // ── Bottone ──────────────────────────────────────────────────
 #define BTN_DEBOUNCE      200   // ms
 #define BTN_LONG_PRESS    3000  // ms → entra/esce CONFIG MODE
-#define BTN_FACTORY_RESET 6000  // ms → reset di fabbrica (dimentica tutto)
+#define BTN_FACTORY_RESET 6000  // ms → apre la schermata CONFERMA RESET
+#define BTN_RESET_CONFIRM_TIMEOUT 15000  // ms senza pressione → annulla conferma
 
 // ── Timeout connessione BLE ──────────────────────────────────
 // Se non si connette entro questo tempo, riaccende l'hotspot
 // e torna in CONFIG così l'utente riprende il controllo.
 #define BLE_CONNECT_GIVEUP 60000  // ms
 
-// ── OLED layout (bicolore 128x64) ────────────────────────────
+// ── OLED layout (bicolore 128x64: gialla righe 0-16, blu da 17) ──
 #define OLED_YEL_BASE   9
 #define OLED_DOT_Y      5
-#define OLED_VALUE_Y    46
-#define OLED_GAUGE_Y    50
-#define OLED_GAUGE_H    5
+#define OLED_VALUE_Y    49   // baseline logisoso32 → cifre su righe 17-49 (zona blu)
+#define OLED_GAUGE_Y    51
+#define OLED_GAUGE_H    4
 #define OLED_GAUGE_X    4
 #define OLED_GAUGE_W    120
-#define OLED_SUB_Y      63
+#define OLED_SUB_Y      63   // helvR08 → testo ~56-63, staccato dalla barra

@@ -21,7 +21,7 @@ struct BuzzerConfig {
   bool enabled;
   int  warnFreq;          // Hz tono warn
   int  dangerFreq;        // Hz tono danger
-  char dangerStyle[12];   // "continuo" | "beep" | "sirena"
+  char dangerStyle[12];   // "continuo" | "impulsi" | "bitonale" | "allarme"
 };
 
 namespace AlertManager {
@@ -31,8 +31,9 @@ namespace AlertManager {
   void loadBuzzerCfg();            // carica da /buzzer.json
   const BuzzerConfig& buzzerCfg();
 
-  // Test buzzer dal web (preview tono per trovare il più forte/acuto)
-  void requestTest(int freq);      // richiesto dall'endpoint web
+  // Test buzzer dal web (preview tono per trovare il più forte/acuto).
+  // Con style != "" suona il pattern danger di quello stile invece del tono fisso.
+  void requestTest(int freq, const char* style = nullptr);
   void serviceTest();              // eseguito dal main loop
 
   // Valuta tutti i valori OBD e triggera feedback
@@ -40,6 +41,7 @@ namespace AlertManager {
   AlertLevel evaluate(const OBDData& data);
 
   // Feedback sonori
+  void beepBoot();                 // suono di avvio alla risonanza del buzzer
   void beepConfirm();              // 1 beep corto — azione confermata
   void beepWarn();                 // 2 beep medi
   void beepDanger();               // beep rapidi continui

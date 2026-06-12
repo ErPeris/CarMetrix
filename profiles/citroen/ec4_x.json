@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Citroen eC4 X","source":"OBDb/Citroen-eC4-X","protocol":"0","pids":[{"cmd":"22D410","hdr":"6B4","name":"SOC","unit":"%","target":"hv_soc","bix":0,"len":16,"mul":0.00195312,"add":0,"min":0,"max":100,"every":4,"src":"EC4X_HVBAT_SOC","rax":"694"}]}

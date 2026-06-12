@@ -1,0 +1,1 @@
+{"schema":2,"brand":"Acura TLX","source":"OBDb/Acura-TLX","protocol":"7","pids":[{"cmd":"222201","hdr":"DA1D","name":"TRANS","unit":"°C","target":"trans_temp","bix":208,"len":8,"mul":1,"add":-40,"min":-40,"max":215,"every":4,"src":"TLX_ATF_T_NEW","rax":"1D"}]}

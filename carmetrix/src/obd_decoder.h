@@ -22,6 +22,9 @@ struct OBDData {
   OBDValue map;        // Manifold Absolute Pressure kPa
   OBDValue boost;      // Boost (MAP - 101.3)      bar
   OBDValue transTemp;  // Transmission Temp        °C
+  OBDValue oilTemp;    // Oil Temp (profilo)       °C
+  OBDValue hvSoc;      // SOC batteria HV (ibride) %
+  OBDValue hvTemp;     // Temp batteria HV/inverter °C
   OBDValue rpm;        // RPM
   OBDValue speed;      // Speed                    km/h
   OBDValue throttle;   // Throttle Position        %
@@ -39,9 +42,18 @@ namespace OBDDecoder {
   OBDValue decodeMode22(const char* name, const char* unit,
                         const char* formula, const ElmResponse& r);
 
-  // Poll completo — chiama dal loop in NORMAL MODE
-  // Aggiorna la struttura OBDData passata per riferimento
-  void pollAll(OBDData& data, bool hasExtended = false);
+  // Maschera PID 01-20 supportati (da getSupportedPIDs/0100): i PID
+  // assenti non vengono interrogati. 0 = sconosciuta → interroga tutto.
+  void setSupportedMask(uint32_t mask1);
+
+  // Polling NON bloccante — chiama dal loop in MONITORING a ogni giro.
+  // Tiene una sola query in volo: quando arriva il prompt decodifica e
+  // invia subito la successiva. Il loop (display, bottone) non si ferma mai.
+  void pollTick(OBDData& data, bool hasExtended = false);
+
+  // true se la ECU non risponde più a nulla (quadro spento): pollTick fa
+  // solo un probe 0100 ogni 10s e riparte da solo quando la ECU torna.
+  bool isStandby();
 
   // Demo Mode — genera dati sintetici che spazzano tutte le zone alert
   // (nominale → warn → danger) per testare display/gauge/buzzer senza OBD

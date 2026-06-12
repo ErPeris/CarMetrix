@@ -1,0 +1,1 @@
+{"schema":2,"brand":"NissanInfiniti All","source":"OBDb/NissanInfiniti","protocol":"6","pids":[{"cmd":"22111F","hdr":"7E0","name":"OIL","unit":"°C","target":"oil_temp","bix":0,"len":8,"mul":1,"add":-50,"min":-50,"max":205,"every":4,"src":"NI_EOT","rax":"7E8"}]}
