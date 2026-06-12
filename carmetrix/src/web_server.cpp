@@ -167,6 +167,7 @@ void WebServer::begin() {
     doc["ghRepo"]      = GITHUB_REPO;
     doc["homeSsid"]    = cfg.homeSsid;
     doc["hasWifiPass"] = (cfg.homePass[0] != '\0');  // non esporre la password
+    doc["hasGithubToken"] = (cfg.githubToken[0] != '\0');  // non esporre il token
     String out;
     serializeJson(doc, out);
     jsonReply(req, 200, out);
@@ -195,6 +196,11 @@ void WebServer::begin() {
         if (obj["homePass"].is<const char*>()) {
           const char* p = obj["homePass"];
           if (p && p[0] != '\0') strlcpy(cfg.homePass, p, sizeof(cfg.homePass));
+        }
+        // Aggiorna il token solo se ne arriva uno nuovo non vuoto
+        if (obj["githubToken"].is<const char*>()) {
+          const char* t = obj["githubToken"];
+          if (t && t[0] != '\0') strlcpy(cfg.githubToken, t, sizeof(cfg.githubToken));
         }
         // noReboot = salvataggio parziale (es. solo WiFi dalla tab Update):
         // non marca la config come completa e non riavvia.
