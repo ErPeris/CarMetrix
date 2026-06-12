@@ -204,7 +204,7 @@ static char     awaitingHdr[8];
 // Mini-coda comandi AT per lo switch header (profili schema 2: PID su ECU
 // diverse). Prima di una query con hdr diverso dall'attivo si inviano
 // ATSH/ATCRA, uno per tick, poi parte la query vera.
-static String  pendingCmds[3];
+static String  pendingCmds[6];
 static int     pendingCount = 0, pendingIdx = 0;
 static bool    pendingAwaiting = false;
 static String  pendingTarget;
@@ -214,18 +214,29 @@ static const char* itemHdr(const PollItem& it) {
   return ProfileLoader::getExtendedPIDs()[it.extIdx].hdr;
 }
 
-// true = switch accodato (chiamante deve attendere i prossimi tick)
-static bool queueHeaderSwitch(const char* want, const char* rax) {
+// true = switch accodato (chiamante deve attendere i prossimi tick).
+// session/fc opzionali (profili schema 2): dopo ATSH/ATCRA si accodano
+// ATFCSH<fc>+ATFCSM1 (flow control multi-frame) e la query di sessione UDS.
+static bool queueHeaderSwitch(const char* want, const char* rax,
+                              const char* session = "", const char* fc = "") {
   pendingTarget = want;
-  pendingCount = want[0]
+  int n = want[0]
     ? BleElm327::getHeaderCmds(want, rax, pendingCmds)
     : BleElm327::getDefaultHeaderCmds(pendingCmds);
-  pendingIdx = 0;
-  pendingAwaiting = false;
-  if (pendingCount == 0) {  // protocollo senza header gestiti: nulla da fare
+  if (n == 0) {  // protocollo senza header gestiti: nulla da fare
+    pendingCount = 0;
     BleElm327::setActiveHdr(want);
     return false;
   }
+  if (fc && fc[0] && n <= 4) {           // flow control: 2 comandi AT
+    pendingCmds[n++] = String("ATFCSH") + fc;
+    pendingCmds[n++] = "ATFCSM1";
+  }
+  if (session && session[0] && n <= 5)   // sessione UDS: 1 query (risposta ignorata)
+    pendingCmds[n++] = session;
+  pendingCount = n;
+  pendingIdx = 0;
+  pendingAwaiting = false;
   return true;
 }
 
@@ -442,9 +453,12 @@ void OBDDecoder::pollTick(OBDData& data, bool hasExtended) {
     // questo stesso item al prossimo tick (pollIdx non avanza).
     const char* want = itemHdr(it);
     if (strcmp(want, BleElm327::activeHdr()) != 0) {
-      const char* rax = (it.extIdx >= 0)
-        ? ProfileLoader::getExtendedPIDs()[it.extIdx].rax : "";
-      if (queueHeaderSwitch(want, rax)) return;
+      const char* rax = "", *session = "", *fc = "";
+      if (it.extIdx >= 0) {
+        const auto& ep = ProfileLoader::getExtendedPIDs()[it.extIdx];
+        rax = ep.rax; session = ep.session; fc = ep.fc;
+      }
+      if (queueHeaderSwitch(want, rax, session, fc)) return;
     }
 
     // Suffisso "risposte attese" (datasheet ELM327): con N note l'ELM
