@@ -364,6 +364,16 @@ input[type=range]{width:100%;accent-color:var(--yel);height:32px}
   </div>
 
   <div class="card">
+    <div class="card-title">Token GitHub <span style="font-size:.6rem;color:var(--dim)">(repo privata)</span></div>
+    <div class="form-group">
+      <label>Personal Access Token <span id="gh-tok-status" style="color:var(--cyan)"></span></label>
+      <input type="password" id="gh-token" placeholder="(incolla per impostarlo)">
+    </div>
+    <div class="hint">Serve solo se la repo CarMetrix è privata. Token fine-grained, Contents read-only sul solo repo. Resta nel dispositivo, non viaggia con l'OTA.</div>
+    <button class="btn btn-cyan" onclick="saveToken()">▸ Salva token</button>
+  </div>
+
+  <div class="card">
     <div class="card-title">Aggiorna da file .bin</div>
     <div class="form-group">
       <label>File firmware</label>
@@ -448,6 +458,7 @@ async function loadConfig() {
     if (d.demoMode) document.getElementById('demo-toggle').classList.add('on');
     if (d.homeSsid) document.getElementById('home-ssid').value = d.homeSsid;
     if (d.hasWifiPass) document.getElementById('home-pass').placeholder = '•••••• (già salvata)';
+    document.getElementById('gh-tok-status').textContent = d.hasGithubToken ? '— impostato' : '';
 
     const badge = document.getElementById('cfg-badge');
     if (d.demoMode) {
@@ -620,6 +631,20 @@ async function saveWifi() {
     const d = await r.json();
     if (d.ok) toast('WiFi salvato');
     else      toast('Errore salvataggio', 'var(--red)');
+  } catch(e) { toast('Errore di rete', 'var(--red)'); }
+}
+
+async function saveToken() {
+  const t = document.getElementById('gh-token').value;
+  if (!t) { toast('Inserisci un token', 'var(--amber)'); return; }
+  try {
+    await fetch('/api/config/save', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ githubToken: t, noReboot: true })
+    });
+    document.getElementById('gh-token').value = '';
+    document.getElementById('gh-tok-status').textContent = '— impostato';
+    toast('Token salvato');
   } catch(e) { toast('Errore di rete', 'var(--red)'); }
 }
 
