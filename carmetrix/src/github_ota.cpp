@@ -64,7 +64,9 @@ void GithubOTA::run() {
     return;
   }
 
-  const bool hasToken = (sizeof(GITHUB_TOKEN) > 1);  // "" → sizeof 1
+  // NVS prioritario (impostato dalla web app), fallback al macro di secrets.h
+  const char* token = cfg.githubToken[0] ? cfg.githubToken : GITHUB_TOKEN;
+  const bool  hasToken = (token[0] != '\0');
 
   // ── 2. Query release GitHub (TLS in blocco così si libera) ─
   // assetDownUrl = browser_download_url (repo pubblica, scaricabile diretto)
@@ -78,7 +80,7 @@ void GithubOTA::run() {
                  + GITHUB_OWNER + "/" + GITHUB_REPO + "/releases/latest";
     https.begin(client, api);
     https.addHeader("User-Agent", "CarMetrix-ESP32");  // GitHub lo richiede
-    if (hasToken) https.addHeader("Authorization", "Bearer " GITHUB_TOKEN);
+    if (hasToken) https.addHeader("Authorization", String("Bearer ") + token);
     https.setTimeout(10000);
     int code = https.GET();
     if (code != 200) {
@@ -128,7 +130,7 @@ void GithubOTA::run() {
     HTTPClient h;
     h.begin(rc, assetApiUrl);
     h.addHeader("User-Agent", "CarMetrix-ESP32");
-    h.addHeader("Authorization", "Bearer " GITHUB_TOKEN);
+    h.addHeader("Authorization", String("Bearer ") + token);
     h.addHeader("Accept", "application/octet-stream");
     const char* collect[] = { "Location" };
     h.collectHeaders(collect, 1);
