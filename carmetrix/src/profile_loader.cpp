@@ -87,6 +87,8 @@ static void parsePids(JsonVariantConst doc, int schema) {
       ep.pidHex = (uint16_t)strtol(cmd + 2, nullptr, 16);
       strlcpy(ep.hdr, p["hdr"] | "", sizeof(ep.hdr));
       strlcpy(ep.rax, p["rax"] | "", sizeof(ep.rax));
+      strlcpy(ep.session, p["session"] | "", sizeof(ep.session));
+      strlcpy(ep.fc,      p["fc"]      | "", sizeof(ep.fc));
       ep.structured = true;
       ep.bix  = p["bix"]  | 0;
       ep.len  = p["len"]  | 8;

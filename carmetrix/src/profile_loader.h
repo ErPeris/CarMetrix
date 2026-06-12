@@ -32,6 +32,8 @@ namespace ProfileLoader {
     uint16_t  pidHex;        // es. 0x2201
     char      hdr[8];        // header ECU target ("DA1D", "7E0"); "" = default
     char      rax[6];        // filtro risposta ("1D", "7E8")
+    char      session[8];    // opz: sessione UDS inviata allo switch header ("1003"); "" = nessuna
+    char      fc[8];         // opz: header flow-control per multi-frame; "" = nessuno
     bool      structured;    // true = schema 2
     uint16_t  bix;           // bit offset nel payload dopo l'echo 62+pid
     uint8_t   len;           // lunghezza in bit (max 32)
