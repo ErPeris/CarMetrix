@@ -16,7 +16,21 @@ parametri del veicolo con allarmi configurabili (buzzer + flash). Configurazione
 - Repo: https://github.com/ErPeris/CarMetrix (git user: ErPeris / demolischer250@gmail.com — config locale)
 - In arrivo: display TFT (ILI9341 2.4" touch, ST7789 1.69", GC9A01 rotondo), ESP32-S3 N16R8
 
-## ⚠️ STATO ATTUALE (v0.3.5+db — database profili completo, giugno 2026, DA TESTARE)
+## ⚠️ STATO ATTUALE (v0.3.5+db + fase A, giugno 2026, DA TESTARE)
+
+**Fase A — quick win (12 giugno 2026, sopra v0.3.5+db, da compilare/testare):**
+1. **Pulsante reattivo**: `BTN_DEBOUNCE` 200→30ms — i tap veloci (<200ms)
+   venivano scartati al rilascio e il cambio schermata sembrava volere ~1s.
+2. **Tab Live RIMOSSA del tutto** (web UI + endpoint `/api/live` +
+   `setLiveData`): inutile, durante il MONITORING l'hotspot è spento
+   (coesistenza WiFi+BLE). `web_index.h` rigenerato (gzip 10932 B).
+3. **Fallback legacy `/profiles/<file>.json` rimosso** da profile_loader:
+   il bundle `/profiles.json` è l'unica via (fallback interno a "generic"
+   invariato).
+4. Roadmap in `docs/superpowers/specs/2026-06-12-prossime-migliorie-design.md`:
+   fase A=quick win (fatta), B=analisi APK Car Scanner (in corso, APK locale),
+   C=migrazione NimBLE (-400KB, futura) — MAI mescolate nella stessa release.
+5. `.gitignore`: `*.apk` e `log*.txt` MAI nel repo pubblico.
 
 **Estensione "database profili" (sopra il layer v0.3.5):**
 1. **Database: sorgenti in `profiles/<marca>/<modello>.json`** (root repo, git,
@@ -26,7 +40,8 @@ parametri del veicolo con allarmi configurabili (buzzer + flash). Configurazione
    servito da /api/profiles). ⚠️ **GOTCHA LittleFS: 1 file = minimo 1 blocco
    da 4KB** → 172 file separati ≈ 700KB, MAI mettere i profili singoli in
    data/! `profile_loader` legge il bundle col **filtro ArduinoJson** (carica
-   solo l'id richiesto); fallback legacy /profiles/<file> se il bundle manca.
+   solo l'id richiesto); il fallback legacy /profiles/<file> è stato RIMOSSO
+   in fase A: senza bundle nessun profilo.
    `cfg.carProfile` ora è l'id senza .json (es. "toyota/yaris_hybrid").
 2. **Converter v3** (`tools/obdb_to_profile.ps1 -All`): TUTTO l'org OBDb
    (740 repo, 101 marche), brand a due token gestiti (Mercedes-Benz,
