@@ -7,6 +7,15 @@
 #include <HTTPUpdate.h>
 #include <ArduinoJson.h>
 
+// Token GitHub per OTA da repo privata (secrets.h, gitignored). Assente o
+// "" = repo pubblica → l'OTA funziona senza autenticazione, come prima.
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#endif
+#ifndef GITHUB_TOKEN
+  #define GITHUB_TOKEN ""
+#endif
+
 static volatile bool requested = false;
 static GithubOTA::State st = GithubOTA::IDLE;
 static int     prog   = 0;
@@ -55,8 +64,12 @@ void GithubOTA::run() {
     return;
   }
 
+  const bool hasToken = (sizeof(GITHUB_TOKEN) > 1);  // "" → sizeof 1
+
   // ── 2. Query release GitHub (TLS in blocco così si libera) ─
-  String assetUrl = "";
+  // assetDownUrl = browser_download_url (repo pubblica, scaricabile diretto)
+  // assetApiUrl  = .../releases/assets/<id> (repo privata, serve token + risolvere il redirect)
+  String assetDownUrl = "", assetApiUrl = "";
   {
     st = CHECKING; msg = "Controllo release su GitHub...";
     WiFiClientSecure client; client.setInsecure();   // no validazione cert
@@ -65,6 +78,7 @@ void GithubOTA::run() {
                  + GITHUB_OWNER + "/" + GITHUB_REPO + "/releases/latest";
     https.begin(client, api);
     https.addHeader("User-Agent", "CarMetrix-ESP32");  // GitHub lo richiede
+    if (hasToken) https.addHeader("Authorization", "Bearer " GITHUB_TOKEN);
     https.setTimeout(10000);
     int code = https.GET();
     if (code != 200) {
@@ -85,7 +99,11 @@ void GithubOTA::run() {
     latest = tag;
     for (JsonObject a : doc["assets"].as<JsonArray>()) {
       String name = a["name"] | "";
-      if (name.endsWith(".bin")) { assetUrl = a["browser_download_url"] | ""; break; }
+      if (name.endsWith(".bin")) {
+        assetDownUrl = a["browser_download_url"] | "";
+        assetApiUrl  = a["url"] | "";
+        break;
+      }
     }
   }
 
@@ -94,12 +112,38 @@ void GithubOTA::run() {
     WiFi.disconnect(false);
     return;
   }
-  if (assetUrl.isEmpty()) {
+  if ((hasToken ? assetApiUrl : assetDownUrl).isEmpty()) {
     st = FAILED; msg = "Nessun file .bin nella release";
     WiFi.disconnect(false); return;
   }
 
-  // ── 3. Download + flash (httpUpdate segue il redirect del CDN) ─
+  // ── 3. Risoluzione URL di download ─────────────────────────
+  // Repo pubblica: browser_download_url è scaricabile diretto (httpUpdate
+  // segue il redirect del CDN). Repo privata: l'asset API redirige a un URL
+  // S3 *firmato* che NON accetta l'header Authorization → va risolto a mano
+  // (no follow), poi si scarica l'URL S3 senza token.
+  String downloadUrl = assetDownUrl;
+  if (hasToken) {
+    WiFiClientSecure rc; rc.setInsecure();
+    HTTPClient h;
+    h.begin(rc, assetApiUrl);
+    h.addHeader("User-Agent", "CarMetrix-ESP32");
+    h.addHeader("Authorization", "Bearer " GITHUB_TOKEN);
+    h.addHeader("Accept", "application/octet-stream");
+    const char* collect[] = { "Location" };
+    h.collectHeaders(collect, 1);
+    h.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+    h.setTimeout(10000);
+    int rcode = h.GET();
+    downloadUrl = h.header("Location");
+    h.end();
+    if (downloadUrl.isEmpty()) {
+      st = FAILED; msg = "Asset privato: redirect mancante (HTTP " + String(rcode) + ")";
+      WiFi.disconnect(false); return;
+    }
+  }
+
+  // ── 4. Download + flash (URL S3 firmato o CDN: nessun token) ─
   st = DOWNLOADING; msg = "Scarico v" + latest + "...";
   Update.onProgress([](size_t done, size_t total) {
     prog = total ? (int)(done * 100 / total) : 0;
@@ -109,7 +153,7 @@ void GithubOTA::run() {
   httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
   httpUpdate.rebootOnUpdate(true);   // riavvia da solo a fine flash
 
-  t_httpUpdate_return ret = httpUpdate.update(upClient, assetUrl);
+  t_httpUpdate_return ret = httpUpdate.update(upClient, downloadUrl);
   // Se arriviamo qui non ha riavviato → esito negativo
   switch (ret) {
     case HTTP_UPDATE_FAILED:
