@@ -62,33 +62,8 @@ bool ProfileLoader::load(const char* profileFile) {
     return true;
   }
 
-  // ── Legacy: file singolo /profiles/<file>.json ────────────
-  String path = "/profiles/" + id + ".json";
-  if (!LittleFS.exists(path)) {
-    Serial.printf("[Profile] File non trovato: %s\n", path.c_str());
-    if (id != "generic") return load("generic");
-    return false;
-  }
-
-  File f = LittleFS.open(path, "r");
-  if (!f) return false;
-
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, f);
-  f.close();
-
-  if (err) {
-    Serial.printf("[Profile] JSON error: %s\n", err.c_str());
-    return false;
-  }
-
-  loadedBrand    = doc["brand"]    | "Generic";
-  loadedProtocol = doc["protocol"] | "0";   // es. "6" = CAN 11bit 500k
-  parsePids(doc, doc["schema"] | 1);
-  loaded = true;
-  Serial.printf("[Profile] Caricato: %s (%d PID estesi)\n",
-                loadedBrand.c_str(), (int)extPIDs.size());
-  return true;
+  Serial.println("[Profile] /profiles.json mancante su LittleFS — nessun profilo caricato");
+  return false;
 }
 
 // Carica i PID estesi (Mode 21/22) da un oggetto profilo (bundle o file)

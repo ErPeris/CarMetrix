@@ -4,7 +4,7 @@
 
 // ============================================================
 //  CarMetrix — profile_loader.h
-//  Carica profilo veicolo da LittleFS (/profiles/xxx.json)
+//  Carica profilo veicolo dal bundle LittleFS /profiles.json (id = "marca/modello")
 //  I PID Mode 22 estendono quelli standard Mode 01
 // ============================================================
 
