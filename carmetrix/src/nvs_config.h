@@ -18,6 +18,7 @@ struct CarMetrixConfig {
   bool     demoMode;         // true → genera dati sintetici, salta BLE
   char     homeSsid[33];     // WiFi di casa per OTA da GitHub
   char     homePass[65];     // password WiFi di casa
+  char     githubToken[128]; // GitHub PAT per OTA da repo privata ("" = repo pubblica)
 };
 
 namespace NVSConfig {
