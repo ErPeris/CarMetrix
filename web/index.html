@@ -172,20 +172,6 @@ select:focus,input:focus{border-color:var(--yel)}
 .alert-pid{font-weight:700;font-size:.88rem;letter-spacing:.05em}
 .alert-row input[type=number]{padding:.5rem .4rem;font-size:.95rem;text-align:center}
 
-/* ── Live ── */
-.live-item{margin-bottom:1.05rem}
-.live-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.3rem}
-.live-name{font-family:var(--mono);font-size:.62rem;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
-.live-val{font-family:var(--mono);font-size:1.35rem;color:#fff}
-.live-val .u{font-size:.66rem;color:var(--dim);margin-left:.3rem}
-.live-track{height:7px;background:var(--line);position:relative;overflow:hidden;
-  clip-path:polygon(0 0,100% 0,calc(100% - 7px) 100%,0 100%)}
-.live-fill{position:absolute;left:0;top:0;height:100%;background:var(--cyan);width:0;transition:width .25s ease-out}
-.live-fill.warn{background:var(--amber)}
-.live-fill.danger{background:var(--red);box-shadow:0 0 10px var(--red)}
-.live-item.novalid{opacity:.3}
-.live-offline{font-size:.82rem;color:var(--amber);padding:.5rem 0}
-
 /* ── Range ── */
 input[type=range]{width:100%;accent-color:var(--yel);height:32px}
 
@@ -292,16 +278,6 @@ input[type=range]{width:100%;accent-color:var(--yel);height:32px}
   </div>
   <button class="btn btn-primary" onclick="saveScreens()">▸ Applica al display</button>
   <div class="hint" style="text-align:center">Applicazione immediata, senza riavvio.</div>
-</div>
-
-<!-- ═══════════ LIVE ═══════════ -->
-<div id="panel-dashboard" class="panel">
-  <div class="card">
-    <div class="card-title">Telemetria <span id="live-age" style="float:right;color:var(--dim)"></span></div>
-    <div id="live-grid">
-      <div class="live-offline">In attesa di dati... (attiva Demo Mode o collega l'OBD)</div>
-    </div>
-  </div>
 </div>
 
 <!-- ═══════════ ALERT ═══════════ -->
@@ -419,10 +395,6 @@ input[type=range]{width:100%;accent-color:var(--yel);height:32px}
     <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12"/><path d="M9 21h6M12 17v4"/></svg>
     Display
   </div>
-  <div class="nav-it" data-panel="dashboard" onclick="tab('dashboard')">
-    <svg viewBox="0 0 24 24"><path d="M3 13h4l2-7 4 14 2-7h6"/></svg>
-    Live
-  </div>
   <div class="nav-it" data-panel="alerts" onclick="tab('alerts')">
     <svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.5"/></svg>
     Alert
@@ -444,8 +416,6 @@ function tab(name) {
   document.querySelectorAll('.panel').forEach(p=>{
     p.classList.toggle('active', p.id==='panel-'+name);
   });
-  if (name === 'dashboard') startLivePolling();
-  else                      stopLivePolling();
   window.scrollTo(0,0);
 }
 
@@ -883,68 +853,6 @@ async function pollOtaStatus() {
 async function reboot() {
   await fetch('/api/reboot', {method:'POST'});
   toast('Riavvio in corso...');
-}
-
-// ── Live ──────────────────────────────────────────────────
-const LIVE_METRICS = [
-  {key:'rpm',     label:'RPM',     unit:'',     min:0,   max:8000, dec:0},
-  {key:'boost',   label:'Boost',   unit:'bar',  min:0,   max:2.5,  dec:2, warn:1.8, danger:2.2},
-  {key:'iat',     label:'IAT',     unit:'°C',   min:-20, max:80,   dec:1, warn:50,  danger:65},
-  {key:'trans',   label:'Trans',   unit:'°C',   min:40,  max:150,  dec:1, warn:90,  danger:110},
-  {key:'oil',     label:'Oil',     unit:'°C',   min:40,  max:160,  dec:1, warn:120, danger:140},
-  {key:'soc',     label:'Batt SOC',unit:'%',    min:0,   max:100,  dec:0},
-  {key:'hvtemp',  label:'HV Temp', unit:'°C',   min:0,   max:60,   dec:1, warn:45,  danger:55},
-  {key:'coolant', label:'Coolant', unit:'°C',   min:40,  max:130,  dec:1, warn:100, danger:110},
-  {key:'speed',   label:'Speed',   unit:'km/h', min:0,   max:220,  dec:0},
-];
-
-let liveTimer = null;
-function startLivePolling() { if (!liveTimer) { pollLive(); liveTimer = setInterval(pollLive, 500); } }
-function stopLivePolling()  { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
-
-async function pollLive() {
-  try {
-    const r = await fetch('/api/live');
-    const d = await r.json();
-    renderLive(d);
-  } catch(e) {
-    document.getElementById('live-grid').innerHTML =
-      '<div class="live-offline">Nessuna risposta dal dispositivo</div>';
-  }
-}
-
-function renderLive(d) {
-  const grid = document.getElementById('live-grid');
-  const age  = document.getElementById('live-age');
-
-  const hasData = LIVE_METRICS.some(m => d[m.key] && d[m.key].valid);
-  if (!hasData) {
-    grid.innerHTML = '<div class="live-offline">In attesa di dati... (attiva Demo Mode o collega l\'OBD)</div>';
-    age.textContent = '';
-    return;
-  }
-  age.textContent = d.age != null ? (d.age/1000).toFixed(1) + 's' : '';
-
-  let html = '';
-  LIVE_METRICS.forEach(m => {
-    const item = d[m.key] || {v:0, valid:false};
-    const val  = item.v;
-    const valid = item.valid;
-    const pct  = Math.max(0, Math.min(100, (val - m.min) / (m.max - m.min) * 100));
-    let cls = '';
-    if (m.danger != null && val >= m.danger)      cls = 'danger';
-    else if (m.warn != null && val >= m.warn)     cls = 'warn';
-    const valStr = valid ? val.toFixed(m.dec) : '—';
-    html += `
-      <div class="live-item ${valid?'':'novalid'}">
-        <div class="live-head">
-          <span class="live-name">${m.label}</span>
-          <span class="live-val">${valStr}<span class="u">${m.unit}</span></span>
-        </div>
-        <div class="live-track"><div class="live-fill ${cls}" style="width:${valid?pct:0}%"></div></div>
-      </div>`;
-  });
-  grid.innerHTML = html;
 }
 
 // ── WiFi scan ─────────────────────────────────────────────
