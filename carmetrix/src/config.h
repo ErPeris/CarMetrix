@@ -58,7 +58,7 @@
 #define BUZZER_RESOLUTION 8     // bit PWM
 
 // ── Bottone ──────────────────────────────────────────────────
-#define BTN_DEBOUNCE      200   // ms
+#define BTN_DEBOUNCE      30    // ms — tap riconosciuto al rilascio; 200ms scartava i click veloci
 #define BTN_LONG_PRESS    3000  // ms → entra/esce CONFIG MODE
 #define BTN_FACTORY_RESET 6000  // ms → apre la schermata CONFERMA RESET
 #define BTN_RESET_CONFIRM_TIMEOUT 15000  // ms senza pressione → annulla conferma
